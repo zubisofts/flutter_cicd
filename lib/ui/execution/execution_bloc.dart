@@ -8,6 +8,8 @@ import '../../engine/step_result.dart';
 import '../../execution/log_line.dart';
 import '../../config/models/pipeline_definition.dart';
 import '../../data/run_repository.dart';
+import '../../services/email_notification_service.dart';
+import '../../services/slack_notification_service.dart';
 
 // ─── Events ───────────────────────────────────────────────────────────────
 
@@ -157,6 +159,8 @@ class ExecutionState extends Equatable {
 class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
   final PipelineRunner _runner;
   final RunRepository _repo;
+  final EmailNotificationService _emailService;
+  final SlackNotificationService _slackService;
   StreamSubscription<StepUpdate>? _stepSub;
   StreamSubscription<LogLine>? _logSub;
   final Queue<LogLine> _logBuffer = Queue();
@@ -166,7 +170,9 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
   RunRequest? get currentRequest => _currentRequest;
   List<StepDefinition> _currentSteps = [];
 
-  ExecutionBloc(this._runner, this._repo) : super(const ExecutionState()) {
+  ExecutionBloc(
+      this._runner, this._repo, this._emailService, this._slackService)
+      : super(const ExecutionState()) {
     on<ExecutionStarted>(_onStarted);
     on<_LogBatchFlushed>(_onLogBatch);
     on<ExecutionStepUpdated>(_onStepUpdated);
@@ -308,6 +314,18 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
     ));
 
     _sendBuildNotification(event.result.success, event.result.totalDuration);
+    if (_currentRequest != null) {
+      _emailService.sendBuildResult(
+        request: _currentRequest!,
+        success: event.result.success,
+        duration: event.result.totalDuration,
+      ).ignore();
+      _slackService.sendBuildResult(
+        request: _currentRequest!,
+        success: event.result.success,
+        duration: event.result.totalDuration,
+      ).ignore();
+    }
 
     final req = _currentRequest;
     final result = event.result;

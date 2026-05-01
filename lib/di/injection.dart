@@ -6,6 +6,8 @@ import '../data/run_repository.dart';
 import '../engine/pipeline_runner.dart';
 import '../engine/step_registry.dart';
 import '../services/credential_store.dart';
+import '../services/email_notification_service.dart';
+import '../services/slack_notification_service.dart';
 import '../ui/execution/execution_bloc.dart';
 
 final getIt = GetIt.instance;
@@ -13,6 +15,10 @@ final getIt = GetIt.instance;
 void setupDependencies() {
   // Credentials (macOS Keychain)
   getIt.registerLazySingleton<CredentialStore>(() => CredentialStore());
+  getIt.registerLazySingleton<EmailNotificationService>(
+      () => EmailNotificationService(getIt<CredentialStore>()));
+  getIt.registerLazySingleton<SlackNotificationService>(
+      () => SlackNotificationService(getIt<CredentialStore>()));
 
   // Config
   getIt.registerLazySingleton<ConfigRepository>(() => ConfigRepository());
@@ -39,6 +45,11 @@ void setupDependencies() {
 
   // UI — singleton so navigating away and back doesn't lose the active run
   getIt.registerLazySingleton<ExecutionBloc>(
-    () => ExecutionBloc(getIt<PipelineRunner>(), getIt<RunRepository>()),
+    () => ExecutionBloc(
+      getIt<PipelineRunner>(),
+      getIt<RunRepository>(),
+      getIt<EmailNotificationService>(),
+      getIt<SlackNotificationService>(),
+    ),
   );
 }

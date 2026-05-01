@@ -5,6 +5,8 @@ import 'package:gap/gap.dart';
 import '../../config/config_repository.dart';
 import '../../di/injection.dart';
 import '../../services/credential_store.dart';
+import '../../services/email_notification_service.dart';
+import '../../services/slack_notification_service.dart';
 import '../shell/app_theme.dart';
 import '../setup/widgets/env_selector.dart';
 import '../setup/widgets/section_card.dart';
@@ -26,6 +28,8 @@ class SettingsScreen extends StatelessWidget {
       create: (_) => SettingsBloc(
         getIt<CredentialStore>(),
         getIt<ConfigRepository>(),
+        getIt<EmailNotificationService>(),
+        getIt<SlackNotificationService>(),
       )..add(SettingsOpened(projectId, initialEnv)),
       child: const _SettingsContent(),
     );
@@ -66,6 +70,10 @@ class _SettingsContent extends StatelessWidget {
                                   _AppleCard(state: state),
                                   const Gap(12),
                                   _FirebaseCard(state: state),
+                                  const Gap(12),
+                                  _EmailNotificationCard(state: state),
+                                  const Gap(12),
+                                  _SlackNotificationCard(state: state),
                                 ],
                               ),
                             ),
@@ -742,6 +750,421 @@ class _EnvConfigCardState extends State<_EnvConfigCard> {
       style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 12),
       decoration: InputDecoration(labelText: label, hintText: hint),
       onChanged: onChanged,
+    );
+  }
+}
+
+// ─── Email Notifications ──────────────────────────────────────────────────
+
+class _EmailNotificationCard extends StatefulWidget {
+  final SettingsState state;
+  const _EmailNotificationCard({required this.state});
+
+  @override
+  State<_EmailNotificationCard> createState() =>
+      _EmailNotificationCardState();
+}
+
+class _EmailNotificationCardState extends State<_EmailNotificationCard> {
+  late bool _enabled;
+  late bool _useSsl;
+  late bool _showPass;
+  late TextEditingController _hostCtrl;
+  late TextEditingController _portCtrl;
+  late TextEditingController _userCtrl;
+  late TextEditingController _passCtrl;
+  late TextEditingController _recipientCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _showPass = false;
+    _initFrom(widget.state.smtpConfig);
+  }
+
+  @override
+  void didUpdateWidget(_EmailNotificationCard old) {
+    super.didUpdateWidget(old);
+    final cfg = widget.state.smtpConfig;
+    final oldCfg = old.state.smtpConfig;
+    if (cfg.host != oldCfg.host ||
+        cfg.recipient != oldCfg.recipient ||
+        cfg.enabled != oldCfg.enabled) {
+      _initFrom(cfg);
+    }
+  }
+
+  void _initFrom(SmtpConfig cfg) {
+    _enabled = cfg.enabled;
+    _useSsl = cfg.useSsl;
+    _hostCtrl = TextEditingController(text: cfg.host);
+    _portCtrl = TextEditingController(text: cfg.port.toString());
+    _userCtrl = TextEditingController(text: cfg.username);
+    _passCtrl = TextEditingController(text: cfg.password);
+    _recipientCtrl = TextEditingController(text: cfg.recipient);
+  }
+
+  @override
+  void dispose() {
+    _hostCtrl.dispose();
+    _portCtrl.dispose();
+    _userCtrl.dispose();
+    _passCtrl.dispose();
+    _recipientCtrl.dispose();
+    super.dispose();
+  }
+
+  SmtpConfig _currentConfig() => SmtpConfig(
+        enabled: _enabled,
+        host: _hostCtrl.text.trim(),
+        port: int.tryParse(_portCtrl.text.trim()) ?? 587,
+        username: _userCtrl.text.trim(),
+        password: _passCtrl.text,
+        recipient: _recipientCtrl.text.trim(),
+        useSsl: _useSsl,
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final bloc = context.read<SettingsBloc>();
+    final isTesting = widget.state.isSendingTestEmail;
+    final isConfigured = widget.state.smtpConfig.isConfigured;
+
+    return SectionCard(
+      title: 'EMAIL NOTIFICATIONS',
+      trailing: isConfigured && widget.state.smtpConfig.enabled
+          ? const Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.notifications_active,
+                  size: 12, color: AppTheme.colorSuccess),
+              Gap(4),
+              Text('Enabled',
+                  style: TextStyle(
+                      color: AppTheme.colorSuccess, fontSize: 11)),
+            ])
+          : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Enable toggle
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Send email on build completion',
+                style: TextStyle(color: Color(0xFFE6EDF3), fontSize: 13),
+              ),
+              Switch(
+                value: _enabled,
+                onChanged: (v) => setState(() => _enabled = v),
+                activeColor: AppTheme.colorSuccess,
+              ),
+            ],
+          ),
+          const Gap(10),
+          // Host + Port
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: TextField(
+                  controller: _hostCtrl,
+                  style: const TextStyle(
+                      color: Color(0xFFE6EDF3), fontSize: 13),
+                  decoration: const InputDecoration(
+                    labelText: 'SMTP host',
+                    hintText: 'smtp.gmail.com',
+                    prefixIcon: Icon(Icons.dns,
+                        size: 16, color: Color(0xFF8B949E)),
+                  ),
+                ),
+              ),
+              const Gap(8),
+              Expanded(
+                child: TextField(
+                  controller: _portCtrl,
+                  style: const TextStyle(
+                      color: Color(0xFFE6EDF3), fontSize: 13),
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Port'),
+                ),
+              ),
+            ],
+          ),
+          const Gap(6),
+          // SSL toggle
+          Row(
+            children: [
+              Switch(
+                value: _useSsl,
+                onChanged: (v) => setState(() {
+                  _useSsl = v;
+                  if (v && _portCtrl.text == '587') {
+                    _portCtrl.text = '465';
+                  } else if (!v && _portCtrl.text == '465') {
+                    _portCtrl.text = '587';
+                  }
+                }),
+                activeColor: AppTheme.colorRunning,
+              ),
+              const Gap(6),
+              const Text('Use SSL (port 465)',
+                  style: TextStyle(
+                      color: Color(0xFF8B949E), fontSize: 12)),
+              const Gap(4),
+              const Text('/ STARTTLS (port 587)',
+                  style: TextStyle(
+                      color: Color(0xFF484F58), fontSize: 12)),
+            ],
+          ),
+          const Gap(10),
+          // Username
+          TextField(
+            controller: _userCtrl,
+            style: const TextStyle(
+                color: Color(0xFFE6EDF3), fontSize: 13),
+            decoration: const InputDecoration(
+              labelText: 'Username (email)',
+              hintText: 'you@gmail.com',
+              prefixIcon: Icon(Icons.person,
+                  size: 16, color: Color(0xFF8B949E)),
+            ),
+          ),
+          const Gap(10),
+          // Password
+          TextField(
+            controller: _passCtrl,
+            obscureText: !_showPass,
+            style: const TextStyle(
+                color: Color(0xFFE6EDF3), fontSize: 13),
+            decoration: InputDecoration(
+              labelText: 'Password / App password',
+              hintText: 'Gmail: use an App Password',
+              prefixIcon: const Icon(Icons.lock,
+                  size: 16, color: Color(0xFF8B949E)),
+              suffixIcon: IconButton(
+                icon: Icon(
+                    _showPass
+                        ? Icons.visibility_off
+                        : Icons.visibility,
+                    size: 16,
+                    color: const Color(0xFF8B949E)),
+                onPressed: () =>
+                    setState(() => _showPass = !_showPass),
+              ),
+            ),
+          ),
+          const Gap(10),
+          // Recipient
+          TextField(
+            controller: _recipientCtrl,
+            style: const TextStyle(
+                color: Color(0xFFE6EDF3), fontSize: 13),
+            decoration: const InputDecoration(
+              labelText: 'Send to (recipient)',
+              hintText: 'team@example.com',
+              prefixIcon: Icon(Icons.email,
+                  size: 16, color: Color(0xFF8B949E)),
+            ),
+          ),
+          const Gap(14),
+          const Row(
+            children: [
+              Icon(Icons.info_outline,
+                  size: 13, color: Color(0xFF8B949E)),
+              Gap(6),
+              Expanded(
+                child: Text(
+                  'Credentials are stored in macOS Keychain. '
+                  'For Gmail, enable 2-step verification and use an App Password.',
+                  style: TextStyle(
+                      color: Color(0xFF8B949E), fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+          const Gap(12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              OutlinedButton.icon(
+                onPressed: isTesting
+                    ? null
+                    : () => bloc
+                        .add(EmailTestRequested(_currentConfig())),
+                icon: isTesting
+                    ? const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send, size: 14),
+                label: Text(isTesting ? 'Sending…' : 'Send Test'),
+              ),
+              const Gap(8),
+              ElevatedButton.icon(
+                onPressed: () =>
+                    bloc.add(EmailConfigSaved(_currentConfig())),
+                icon: const Icon(Icons.save, size: 14),
+                label: const Text('Save to Keychain'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Slack Notifications ──────────────────────────────────────────────────
+
+class _SlackNotificationCard extends StatefulWidget {
+  final SettingsState state;
+  const _SlackNotificationCard({required this.state});
+
+  @override
+  State<_SlackNotificationCard> createState() =>
+      _SlackNotificationCardState();
+}
+
+class _SlackNotificationCardState extends State<_SlackNotificationCard> {
+  late bool _enabled;
+  late bool _showUrl;
+  late TextEditingController _urlCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _showUrl = false;
+    _initFrom(widget.state.slackConfig);
+  }
+
+  @override
+  void didUpdateWidget(_SlackNotificationCard old) {
+    super.didUpdateWidget(old);
+    final cfg = widget.state.slackConfig;
+    final oldCfg = old.state.slackConfig;
+    if (cfg.webhookUrl != oldCfg.webhookUrl ||
+        cfg.enabled != oldCfg.enabled) {
+      _initFrom(cfg);
+    }
+  }
+
+  void _initFrom(SlackConfig cfg) {
+    _enabled = cfg.enabled;
+    _urlCtrl = TextEditingController(text: cfg.webhookUrl);
+  }
+
+  @override
+  void dispose() {
+    _urlCtrl.dispose();
+    super.dispose();
+  }
+
+  SlackConfig _currentConfig() => SlackConfig(
+        enabled: _enabled,
+        webhookUrl: _urlCtrl.text.trim(),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final bloc = context.read<SettingsBloc>();
+    final isTesting = widget.state.isSendingSlackTest;
+    final isConfigured = widget.state.slackConfig.isConfigured;
+
+    return SectionCard(
+      title: 'SLACK NOTIFICATIONS',
+      trailing: isConfigured && widget.state.slackConfig.enabled
+          ? const Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.notifications_active,
+                  size: 12, color: AppTheme.colorSuccess),
+              Gap(4),
+              Text('Enabled',
+                  style: TextStyle(
+                      color: AppTheme.colorSuccess, fontSize: 11)),
+            ])
+          : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Post to Slack on build completion',
+                style: TextStyle(color: Color(0xFFE6EDF3), fontSize: 13),
+              ),
+              Switch(
+                value: _enabled,
+                onChanged: (v) => setState(() => _enabled = v),
+                activeColor: AppTheme.colorSuccess,
+              ),
+            ],
+          ),
+          const Gap(10),
+          TextField(
+            controller: _urlCtrl,
+            obscureText: !_showUrl,
+            style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 13),
+            decoration: InputDecoration(
+              labelText: 'Incoming Webhook URL',
+              hintText: 'https://hooks.slack.com/services/…',
+              prefixIcon: const Icon(Icons.webhook,
+                  size: 16, color: Color(0xFF8B949E)),
+              suffixIcon: IconButton(
+                icon: Icon(
+                    _showUrl ? Icons.visibility_off : Icons.visibility,
+                    size: 16,
+                    color: const Color(0xFF8B949E)),
+                onPressed: () => setState(() => _showUrl = !_showUrl),
+              ),
+            ),
+          ),
+          const Gap(10),
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, size: 13, color: Color(0xFF8B949E)),
+              Gap(6),
+              Expanded(
+                child: Text(
+                  'Create a Webhook in your Slack workspace: '
+                  'Apps → Incoming Webhooks → Add New Webhook. '
+                  'The URL is stored in macOS Keychain.',
+                  style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+          const Gap(12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              OutlinedButton.icon(
+                onPressed: isTesting
+                    ? null
+                    : () =>
+                        bloc.add(SlackTestRequested(_currentConfig())),
+                icon: isTesting
+                    ? const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send, size: 14),
+                label: Text(isTesting ? 'Posting…' : 'Send Test'),
+              ),
+              const Gap(8),
+              ElevatedButton.icon(
+                onPressed: () =>
+                    bloc.add(SlackConfigSaved(_currentConfig())),
+                icon: const Icon(Icons.save, size: 14),
+                label: const Text('Save to Keychain'),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

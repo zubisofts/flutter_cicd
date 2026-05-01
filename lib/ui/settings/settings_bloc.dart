@@ -3,6 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../config/config_repository.dart';
 import '../../services/credential_store.dart';
+import '../../services/email_notification_service.dart';
+import '../../services/slack_notification_service.dart';
 
 // ─── Events ───────────────────────────────────────────────────────────────
 
@@ -73,6 +75,34 @@ class EnvConfigSaved extends SettingsEvent {
   const EnvConfigSaved();
 }
 
+class EmailConfigSaved extends SettingsEvent {
+  final SmtpConfig config;
+  const EmailConfigSaved(this.config);
+  @override
+  List<Object?> get props => [config.host, config.recipient];
+}
+
+class EmailTestRequested extends SettingsEvent {
+  final SmtpConfig config;
+  const EmailTestRequested(this.config);
+  @override
+  List<Object?> get props => [config.host];
+}
+
+class SlackConfigSaved extends SettingsEvent {
+  final SlackConfig config;
+  const SlackConfigSaved(this.config);
+  @override
+  List<Object?> get props => [config.webhookUrl];
+}
+
+class SlackTestRequested extends SettingsEvent {
+  final SlackConfig config;
+  const SlackTestRequested(this.config);
+  @override
+  List<Object?> get props => [config.webhookUrl];
+}
+
 // ─── State ────────────────────────────────────────────────────────────────
 
 class SettingsState extends Equatable {
@@ -94,6 +124,10 @@ class SettingsState extends Equatable {
   final String dartDefineFromFile;
   final String firebaseTesterGroups; // comma-separated
 
+  final SmtpConfig smtpConfig;
+  final bool isSendingTestEmail;
+  final SlackConfig slackConfig;
+  final bool isSendingSlackTest;
   final bool isLoading;
   final String? savedMessage;
   final String? error;
@@ -122,6 +156,10 @@ class SettingsState extends Equatable {
     this.iosProvisioningProfile = '',
     this.dartDefineFromFile = '',
     this.firebaseTesterGroups = '',
+    this.smtpConfig = const SmtpConfig(),
+    this.isSendingTestEmail = false,
+    this.slackConfig = const SlackConfig(),
+    this.isSendingSlackTest = false,
     this.isLoading = false,
     this.savedMessage,
     this.error,
@@ -143,6 +181,10 @@ class SettingsState extends Equatable {
     String? iosProvisioningProfile,
     String? dartDefineFromFile,
     String? firebaseTesterGroups,
+    SmtpConfig? smtpConfig,
+    bool? isSendingTestEmail,
+    SlackConfig? slackConfig,
+    bool? isSendingSlackTest,
     bool? isLoading,
     String? savedMessage,
     String? error,
@@ -166,6 +208,10 @@ class SettingsState extends Equatable {
             iosProvisioningProfile ?? this.iosProvisioningProfile,
         dartDefineFromFile: dartDefineFromFile ?? this.dartDefineFromFile,
         firebaseTesterGroups: firebaseTesterGroups ?? this.firebaseTesterGroups,
+        smtpConfig: smtpConfig ?? this.smtpConfig,
+        isSendingTestEmail: isSendingTestEmail ?? this.isSendingTestEmail,
+        slackConfig: slackConfig ?? this.slackConfig,
+        isSendingSlackTest: isSendingSlackTest ?? this.isSendingSlackTest,
         isLoading: isLoading ?? this.isLoading,
         savedMessage: clearSaved ? null : (savedMessage ?? this.savedMessage),
         error: clearError ? null : (error ?? this.error),
@@ -188,6 +234,13 @@ class SettingsState extends Equatable {
         iosProvisioningProfile,
         dartDefineFromFile,
         firebaseTesterGroups,
+        smtpConfig.enabled,
+        smtpConfig.host,
+        smtpConfig.recipient,
+        isSendingTestEmail,
+        slackConfig.enabled,
+        slackConfig.webhookUrl,
+        isSendingSlackTest,
         isLoading,
         savedMessage,
         error,
@@ -199,8 +252,12 @@ class SettingsState extends Equatable {
 class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   final CredentialStore _creds;
   final ConfigRepository _configRepo;
+  final EmailNotificationService _emailService;
+  final SlackNotificationService _slackService;
 
-  SettingsBloc(this._creds, this._configRepo) : super(const SettingsState()) {
+  SettingsBloc(
+      this._creds, this._configRepo, this._emailService, this._slackService)
+      : super(const SettingsState()) {
     on<SettingsOpened>(_onOpened);
     on<SettingsEnvChanged>(_onEnvChanged);
     on<AndroidSigningSaved>(_onAndroidSigningSaved);
@@ -208,6 +265,10 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<FirebaseTokenSaved>(_onFirebaseTokenSaved);
     on<EnvConfigFieldUpdated>(_onFieldUpdated);
     on<EnvConfigSaved>(_onEnvConfigSaved);
+    on<EmailConfigSaved>(_onEmailConfigSaved);
+    on<EmailTestRequested>(_onEmailTestRequested);
+    on<SlackConfigSaved>(_onSlackConfigSaved);
+    on<SlackTestRequested>(_onSlackTestRequested);
   }
 
   Future<void> _onOpened(
@@ -235,6 +296,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       final appleCreds = await _creds.loadAppleCredentials(
           projectId: projectId, envName: envName);
       final firebaseToken = await _creds.loadFirebaseToken();
+      final smtpConfig = await _creds.loadSmtpConfig();
+      final slackConfig = await _creds.loadSlackConfig();
       final envConfig = await _configRepo.loadEnv(projectId, envName);
 
       emit(state.copyWith(
@@ -253,6 +316,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
         firebaseTesterGroups: envConfig.distribution.firebase
                 ?.testerGroups.join(', ') ??
             '',
+        smtpConfig: smtpConfig,
+        slackConfig: slackConfig,
         isLoading: false,
         clearError: true,
       ));
@@ -373,6 +438,74 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       emit(state.copyWith(clearSaved: true));
     } catch (e) {
       emit(state.copyWith(error: e.toString()));
+    }
+  }
+
+  Future<void> _onEmailConfigSaved(
+      EmailConfigSaved event, Emitter<SettingsState> emit) async {
+    try {
+      await _creds.saveSmtpConfig(event.config);
+      emit(state.copyWith(
+        smtpConfig: event.config,
+        savedMessage: 'Email notification settings saved to Keychain',
+      ));
+      await Future.delayed(const Duration(seconds: 3));
+      emit(state.copyWith(clearSaved: true));
+    } catch (e) {
+      emit(state.copyWith(error: e.toString()));
+    }
+  }
+
+  Future<void> _onEmailTestRequested(
+      EmailTestRequested event, Emitter<SettingsState> emit) async {
+    emit(state.copyWith(isSendingTestEmail: true, clearError: true));
+    try {
+      await _emailService.sendTestEmail(event.config);
+      emit(state.copyWith(
+        isSendingTestEmail: false,
+        savedMessage: 'Test email sent to ${event.config.recipient}',
+      ));
+      await Future.delayed(const Duration(seconds: 3));
+      emit(state.copyWith(clearSaved: true));
+    } catch (e) {
+      emit(state.copyWith(
+        isSendingTestEmail: false,
+        error: 'Failed to send test email: $e',
+      ));
+    }
+  }
+
+  Future<void> _onSlackConfigSaved(
+      SlackConfigSaved event, Emitter<SettingsState> emit) async {
+    try {
+      await _creds.saveSlackConfig(event.config);
+      emit(state.copyWith(
+        slackConfig: event.config,
+        savedMessage: 'Slack settings saved to Keychain',
+      ));
+      await Future.delayed(const Duration(seconds: 3));
+      emit(state.copyWith(clearSaved: true));
+    } catch (e) {
+      emit(state.copyWith(error: e.toString()));
+    }
+  }
+
+  Future<void> _onSlackTestRequested(
+      SlackTestRequested event, Emitter<SettingsState> emit) async {
+    emit(state.copyWith(isSendingSlackTest: true, clearError: true));
+    try {
+      await _slackService.sendTestMessage(event.config.webhookUrl);
+      emit(state.copyWith(
+        isSendingSlackTest: false,
+        savedMessage: 'Test message posted to Slack',
+      ));
+      await Future.delayed(const Duration(seconds: 3));
+      emit(state.copyWith(clearSaved: true));
+    } catch (e) {
+      emit(state.copyWith(
+        isSendingSlackTest: false,
+        error: 'Failed to post to Slack: $e',
+      ));
     }
   }
 }

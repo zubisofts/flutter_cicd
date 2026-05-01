@@ -104,6 +104,69 @@ class CredentialStore {
     );
   }
 
+  // ── Slack Notifications ───────────────────────────────────────────────────
+
+  static const _slackPrefix = 'cicd.slack';
+
+  Future<void> saveSlackConfig(SlackConfig config) async {
+    await Future.wait([
+      _storage.write(
+          key: '$_slackPrefix.enabled', value: config.enabled.toString()),
+      _storage.write(key: '$_slackPrefix.webhook_url', value: config.webhookUrl),
+    ]);
+  }
+
+  Future<SlackConfig> loadSlackConfig() async {
+    final values = await Future.wait([
+      _storage.read(key: '$_slackPrefix.enabled'),
+      _storage.read(key: '$_slackPrefix.webhook_url'),
+    ]);
+    return SlackConfig(
+      enabled: values[0] == 'true',
+      webhookUrl: values[1] ?? '',
+    );
+  }
+
+  // ── SMTP / Email Notifications ────────────────────────────────────────────
+
+  static const _smtpPrefix = 'cicd.smtp';
+
+  Future<void> saveSmtpConfig(SmtpConfig config) async {
+    await Future.wait([
+      _storage.write(
+          key: '$_smtpPrefix.enabled', value: config.enabled.toString()),
+      _storage.write(key: '$_smtpPrefix.host', value: config.host),
+      _storage.write(
+          key: '$_smtpPrefix.port', value: config.port.toString()),
+      _storage.write(key: '$_smtpPrefix.username', value: config.username),
+      _storage.write(key: '$_smtpPrefix.password', value: config.password),
+      _storage.write(key: '$_smtpPrefix.recipient', value: config.recipient),
+      _storage.write(
+          key: '$_smtpPrefix.use_ssl', value: config.useSsl.toString()),
+    ]);
+  }
+
+  Future<SmtpConfig> loadSmtpConfig() async {
+    final values = await Future.wait([
+      _storage.read(key: '$_smtpPrefix.enabled'),
+      _storage.read(key: '$_smtpPrefix.host'),
+      _storage.read(key: '$_smtpPrefix.port'),
+      _storage.read(key: '$_smtpPrefix.username'),
+      _storage.read(key: '$_smtpPrefix.password'),
+      _storage.read(key: '$_smtpPrefix.recipient'),
+      _storage.read(key: '$_smtpPrefix.use_ssl'),
+    ]);
+    return SmtpConfig(
+      enabled: values[0] == 'true',
+      host: values[1] ?? '',
+      port: int.tryParse(values[2] ?? '') ?? 587,
+      username: values[3] ?? '',
+      password: values[4] ?? '',
+      recipient: values[5] ?? '',
+      useSsl: values[6] == 'true',
+    );
+  }
+
   Future<void> clearProject(String projectId) async {
     final all = await _storage.readAll();
     for (final key in all.keys) {
@@ -141,4 +204,35 @@ class AppleCredentials {
   });
 
   bool get isConfigured => appleId.isNotEmpty;
+}
+
+class SlackConfig {
+  final bool enabled;
+  final String webhookUrl;
+
+  const SlackConfig({this.enabled = false, this.webhookUrl = ''});
+
+  bool get isConfigured => webhookUrl.isNotEmpty;
+}
+
+class SmtpConfig {
+  final bool enabled;
+  final String host;
+  final int port;
+  final String username;
+  final String password;
+  final String recipient;
+  final bool useSsl;
+
+  const SmtpConfig({
+    this.enabled = false,
+    this.host = '',
+    this.port = 587,
+    this.username = '',
+    this.password = '',
+    this.recipient = '',
+    this.useSsl = false,
+  });
+
+  bool get isConfigured => host.isNotEmpty && recipient.isNotEmpty;
 }
