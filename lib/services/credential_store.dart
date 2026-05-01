@@ -167,6 +167,54 @@ class CredentialStore {
     );
   }
 
+  // ── Teams Notifications ───────────────────────────────────────────────────
+
+  static const _teamsPrefix = 'cicd.teams';
+
+  Future<void> saveTeamsConfig(TeamsConfig config) async {
+    await Future.wait([
+      _storage.write(
+          key: '$_teamsPrefix.enabled', value: config.enabled.toString()),
+      _storage.write(key: '$_teamsPrefix.webhook_url', value: config.webhookUrl),
+    ]);
+  }
+
+  Future<TeamsConfig> loadTeamsConfig() async {
+    final values = await Future.wait([
+      _storage.read(key: '$_teamsPrefix.enabled'),
+      _storage.read(key: '$_teamsPrefix.webhook_url'),
+    ]);
+    return TeamsConfig(
+      enabled: values[0] == 'true',
+      webhookUrl: values[1] ?? '',
+    );
+  }
+
+  // ── Google Chat Notifications ─────────────────────────────────────────────
+
+  static const _googleChatPrefix = 'cicd.google_chat';
+
+  Future<void> saveGoogleChatConfig(GoogleChatConfig config) async {
+    await Future.wait([
+      _storage.write(
+          key: '$_googleChatPrefix.enabled',
+          value: config.enabled.toString()),
+      _storage.write(
+          key: '$_googleChatPrefix.webhook_url', value: config.webhookUrl),
+    ]);
+  }
+
+  Future<GoogleChatConfig> loadGoogleChatConfig() async {
+    final values = await Future.wait([
+      _storage.read(key: '$_googleChatPrefix.enabled'),
+      _storage.read(key: '$_googleChatPrefix.webhook_url'),
+    ]);
+    return GoogleChatConfig(
+      enabled: values[0] == 'true',
+      webhookUrl: values[1] ?? '',
+    );
+  }
+
   Future<void> clearProject(String projectId) async {
     final all = await _storage.readAll();
     for (final key in all.keys) {
@@ -235,4 +283,22 @@ class SmtpConfig {
   });
 
   bool get isConfigured => host.isNotEmpty && recipient.isNotEmpty;
+}
+
+class TeamsConfig {
+  final bool enabled;
+  final String webhookUrl;
+
+  const TeamsConfig({this.enabled = false, this.webhookUrl = ''});
+
+  bool get isConfigured => webhookUrl.isNotEmpty;
+}
+
+class GoogleChatConfig {
+  final bool enabled;
+  final String webhookUrl;
+
+  const GoogleChatConfig({this.enabled = false, this.webhookUrl = ''});
+
+  bool get isConfigured => webhookUrl.isNotEmpty;
 }

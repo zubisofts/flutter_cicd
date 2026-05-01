@@ -9,7 +9,10 @@ import '../../execution/log_line.dart';
 import '../../config/models/pipeline_definition.dart';
 import '../../data/run_repository.dart';
 import '../../services/email_notification_service.dart';
+import '../../services/google_chat_notification_service.dart';
 import '../../services/slack_notification_service.dart';
+import '../../services/teams_notification_service.dart';
+import '../../services/tray_service.dart';
 
 // ─── Events ───────────────────────────────────────────────────────────────
 
@@ -108,6 +111,8 @@ class ExecutionState extends Equatable {
   final Duration? totalDuration;
   final bool? overallSuccess;
   final String? errorMessage;
+  /// Persistent paths to build artifacts, keyed by platform.
+  final Map<String, String> artifacts;
 
   const ExecutionState({
     this.phase = ExecutionPhase.idle,
@@ -117,6 +122,7 @@ class ExecutionState extends Equatable {
     this.totalDuration,
     this.overallSuccess,
     this.errorMessage,
+    this.artifacts = const {},
   });
 
   Duration get elapsed => startedAt != null
@@ -131,6 +137,7 @@ class ExecutionState extends Equatable {
     Duration? totalDuration,
     bool? overallSuccess,
     String? errorMessage,
+    Map<String, String>? artifacts,
   }) =>
       ExecutionState(
         phase: phase ?? this.phase,
@@ -140,6 +147,7 @@ class ExecutionState extends Equatable {
         totalDuration: totalDuration ?? this.totalDuration,
         overallSuccess: overallSuccess ?? this.overallSuccess,
         errorMessage: errorMessage ?? this.errorMessage,
+        artifacts: artifacts ?? this.artifacts,
       );
 
   @override
@@ -151,6 +159,7 @@ class ExecutionState extends Equatable {
         totalDuration,
         overallSuccess,
         errorMessage,
+        artifacts.length,
       ];
 }
 
@@ -161,6 +170,9 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
   final RunRepository _repo;
   final EmailNotificationService _emailService;
   final SlackNotificationService _slackService;
+  final TeamsNotificationService _teamsService;
+  final GoogleChatNotificationService _googleChatService;
+  final TrayService _tray;
   StreamSubscription<StepUpdate>? _stepSub;
   StreamSubscription<LogLine>? _logSub;
   final Queue<LogLine> _logBuffer = Queue();
@@ -171,8 +183,14 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
   List<StepDefinition> _currentSteps = [];
 
   ExecutionBloc(
-      this._runner, this._repo, this._emailService, this._slackService)
-      : super(const ExecutionState()) {
+    this._runner,
+    this._repo,
+    this._emailService,
+    this._slackService,
+    this._teamsService,
+    this._googleChatService,
+    this._tray,
+  ) : super(const ExecutionState()) {
     on<ExecutionStarted>(_onStarted);
     on<_LogBatchFlushed>(_onLogBatch);
     on<ExecutionStepUpdated>(_onStepUpdated);
@@ -184,6 +202,7 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
   /// Mirrors the platform/target condition logic from [PipelineStep.shouldExecute]
   /// so we can pre-filter the display list before execution starts.
   bool _stepWillRun(StepDefinition step, RunRequest request) {
+    if (request.skipStepIds.contains(step.id)) return false;
     final cond = step.condition;
     if (cond == null || cond.isEmpty) return true;
     switch (cond) {
@@ -229,7 +248,11 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
       startedAt: DateTime.now(),
       overallSuccess: null,
       errorMessage: null,
+      artifacts: {},
     ));
+
+    _tray.setBuilding(
+        '${event.request.projectName} · ${event.request.envName}').ignore();
 
     _stepSub?.cancel();
     _logSub?.cancel();
@@ -311,7 +334,17 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
       overallSuccess: event.result.success,
       totalDuration: event.result.totalDuration,
       errorMessage: event.result.errorMessage,
+      artifacts: event.result.artifacts,
     ));
+
+    final label = _currentRequest != null
+        ? '${_currentRequest!.projectName} · ${_currentRequest!.envName}'
+        : '';
+    if (event.result.success) {
+      _tray.setSuccess(label).ignore();
+    } else {
+      _tray.setFailed(label).ignore();
+    }
 
     _sendBuildNotification(event.result.success, event.result.totalDuration);
     if (_currentRequest != null) {
@@ -321,6 +354,16 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
         duration: event.result.totalDuration,
       ).ignore();
       _slackService.sendBuildResult(
+        request: _currentRequest!,
+        success: event.result.success,
+        duration: event.result.totalDuration,
+      ).ignore();
+      _teamsService.sendBuildResult(
+        request: _currentRequest!,
+        success: event.result.success,
+        duration: event.result.totalDuration,
+      ).ignore();
+      _googleChatService.sendBuildResult(
         request: _currentRequest!,
         success: event.result.success,
         duration: event.result.totalDuration,
@@ -394,12 +437,14 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
   void _onAbortRequested(
       ExecutionAbortRequested event, Emitter<ExecutionState> emit) {
     _runner.abort();
+    _tray.setIdle().ignore();
     emit(state.copyWith(phase: ExecutionPhase.aborted));
   }
 
   void _onReset(ExecutionReset event, Emitter<ExecutionState> emit) {
     _stepSub?.cancel();
     _logSub?.cancel();
+    _tray.setIdle().ignore();
     emit(const ExecutionState());
   }
 

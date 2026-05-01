@@ -5,6 +5,7 @@ import 'package:equatable/equatable.dart';
 import 'package:path/path.dart' as p;
 import '../../data/database.dart';
 import '../../data/run_repository.dart';
+import '../../engine/step_result.dart';
 
 // ─── Events ───────────────────────────────────────────────────────────────
 
@@ -43,6 +44,17 @@ class HistoryRetryClear extends HistoryEvent {
   const HistoryRetryClear();
 }
 
+class HistoryResumeRequested extends HistoryEvent {
+  final String runId;
+  const HistoryResumeRequested(this.runId);
+  @override
+  List<Object?> get props => [runId];
+}
+
+class HistoryResumeClear extends HistoryEvent {
+  const HistoryResumeClear();
+}
+
 class HistoryLogLoaded extends HistoryEvent {
   final String runId;
   final List<String> lines;
@@ -61,6 +73,8 @@ class HistoryState extends Equatable {
   final bool isLoading;
   final String? error;
   final RunRecord? retryRun; // set briefly when user requests retry
+  final RunRecord? resumeRun; // set briefly when user requests resume
+  final Set<String> resumeSkipStepIds; // steps to skip on resume
 
   const HistoryState({
     this.runs = const [],
@@ -70,6 +84,8 @@ class HistoryState extends Equatable {
     this.isLoading = false,
     this.error,
     this.retryRun,
+    this.resumeRun,
+    this.resumeSkipStepIds = const {},
   });
 
   HistoryState copyWith({
@@ -82,6 +98,9 @@ class HistoryState extends Equatable {
     bool clearSelection = false,
     RunRecord? retryRun,
     bool clearRetry = false,
+    RunRecord? resumeRun,
+    Set<String>? resumeSkipStepIds,
+    bool clearResume = false,
   }) =>
       HistoryState(
         runs: runs ?? this.runs,
@@ -93,6 +112,9 @@ class HistoryState extends Equatable {
         isLoading: isLoading ?? this.isLoading,
         error: error ?? this.error,
         retryRun: clearRetry ? null : (retryRun ?? this.retryRun),
+        resumeRun: clearResume ? null : (resumeRun ?? this.resumeRun),
+        resumeSkipStepIds:
+            clearResume ? {} : (resumeSkipStepIds ?? this.resumeSkipStepIds),
       );
 
   // Stats
@@ -110,6 +132,8 @@ class HistoryState extends Equatable {
         isLoading,
         error,
         retryRun?.id,
+        resumeRun?.id,
+        resumeSkipStepIds.length,
       ];
 }
 
@@ -129,6 +153,8 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
     on<HistoryRunDeleted>(_onRunDeleted);
     on<HistoryRetryRequested>(_onRetryRequested);
     on<HistoryRetryClear>((_, emit) => emit(state.copyWith(clearRetry: true)));
+    on<HistoryResumeRequested>(_onResumeRequested);
+    on<HistoryResumeClear>((_, emit) => emit(state.copyWith(clearResume: true)));
     on<HistoryLogLoaded>(_onLogLoaded);
   }
 
@@ -193,6 +219,19 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
       orElse: () => state.runs.first,
     );
     emit(state.copyWith(retryRun: run));
+  }
+
+  void _onResumeRequested(
+      HistoryResumeRequested event, Emitter<HistoryState> emit) {
+    final run = state.runs.firstWhere(
+      (r) => r.id == event.runId,
+      orElse: () => state.runs.first,
+    );
+    final skipIds = state.selectedSteps
+        .where((s) => StepStatus.values[s.statusIndex] == StepStatus.success)
+        .map((s) => s.stepId)
+        .toSet();
+    emit(state.copyWith(resumeRun: run, resumeSkipStepIds: skipIds));
   }
 
   void _onLogLoaded(HistoryLogLoaded event, Emitter<HistoryState> emit) {

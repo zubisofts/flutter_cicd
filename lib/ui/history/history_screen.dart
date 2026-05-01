@@ -13,6 +13,23 @@ import '../shell/app_theme.dart';
 import '../../execution/log_line.dart';
 import 'history_bloc.dart';
 
+RunRequest _runRequestFrom(RunRecord run, {Set<String> skipStepIds = const {}}) =>
+    RunRequest(
+      projectId: run.projectId,
+      projectName: run.projectName,
+      branch: run.branch,
+      envName: run.envName,
+      versionName: run.versionLabel.split('+').first,
+      buildNumber: int.tryParse(
+              run.versionLabel.contains('+')
+                  ? run.versionLabel.split('+').last
+                  : '1') ??
+          1,
+      platforms: run.platforms.split(',').map((e) => e.trim()).toList(),
+      targets: run.targets.split(',').map((e) => e.trim()).toList(),
+      skipStepIds: skipStepIds,
+    );
+
 class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});
 
@@ -33,25 +50,19 @@ class _HistoryContent extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocConsumer<HistoryBloc, HistoryState>(
       listenWhen: (prev, curr) =>
-          curr.retryRun != null && prev.retryRun == null,
+          (curr.retryRun != null && prev.retryRun == null) ||
+          (curr.resumeRun != null && prev.resumeRun == null),
       listener: (context, state) {
-        final run = state.retryRun!;
-        context.read<HistoryBloc>().add(const HistoryRetryClear());
-        final request = RunRequest(
-          projectId: run.projectId,
-          projectName: run.projectName,
-          branch: run.branch,
-          envName: run.envName,
-          versionName: run.versionLabel.split('+').first,
-          buildNumber: int.tryParse(
-                  run.versionLabel.contains('+')
-                      ? run.versionLabel.split('+').last
-                      : '1') ??
-              1,
-          platforms: run.platforms.split(',').map((e) => e.trim()).toList(),
-          targets: run.targets.split(',').map((e) => e.trim()).toList(),
-        );
-        context.go('/run', extra: request);
+        if (state.retryRun != null) {
+          final run = state.retryRun!;
+          context.read<HistoryBloc>().add(const HistoryRetryClear());
+          context.go('/run', extra: _runRequestFrom(run));
+        } else if (state.resumeRun != null) {
+          final run = state.resumeRun!;
+          final skipIds = state.resumeSkipStepIds;
+          context.read<HistoryBloc>().add(const HistoryResumeClear());
+          context.go('/run', extra: _runRequestFrom(run, skipStepIds: skipIds));
+        }
       },
       builder: (context, state) {
         return Scaffold(
@@ -92,6 +103,8 @@ class _HistoryContent extends StatelessWidget {
                                   label: state.successRate,
                                   color: const Color(0xFF8B949E)),
                             ]),
+                            const Gap(10),
+                            _DurationSparkline(runs: state.runs),
                           ],
                         ],
                       ),
@@ -313,6 +326,23 @@ class _RunDetail extends StatelessWidget {
                       textStyle: const TextStyle(fontSize: 12),
                     ),
                   ),
+                  if (!run.success) ...[
+                    const Gap(8),
+                    OutlinedButton.icon(
+                      onPressed: () => context
+                          .read<HistoryBloc>()
+                          .add(HistoryResumeRequested(run.id)),
+                      icon: const Icon(Icons.fast_forward, size: 14),
+                      label: const Text('Resume'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFDB8C39),
+                        side: const BorderSide(color: Color(0xFFDB8C39)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        textStyle: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
                 ],
               ),
               const Gap(6),
@@ -499,4 +529,71 @@ class _EmptyDetail extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─── Duration Sparkline ───────────────────────────────────────────────────
+
+class _DurationSparkline extends StatelessWidget {
+  final List<RunRecord> runs;
+  const _DurationSparkline({required this.runs});
+
+  @override
+  Widget build(BuildContext context) {
+    // Runs are newest-first; take last 20 and reverse to oldest-first
+    final recent = runs.take(20).toList().reversed.toList();
+    if (recent.length < 2) return const SizedBox.shrink();
+    return SizedBox(
+      height: 36,
+      width: double.infinity,
+      child: CustomPaint(
+        painter: _SparklinePainter(recent),
+      ),
+    );
+  }
+}
+
+class _SparklinePainter extends CustomPainter {
+  final List<RunRecord> runs;
+  _SparklinePainter(this.runs);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (runs.length < 2) return;
+
+    final durations = runs.map((r) => (r.durationSeconds ?? 0).toDouble()).toList();
+    final maxD = durations.fold<double>(1.0, (m, d) => d > m ? d : m);
+
+    final points = <Offset>[];
+    for (int i = 0; i < runs.length; i++) {
+      final x = i / (runs.length - 1) * size.width;
+      final y = size.height - (durations[i] / maxD) * (size.height - 8) - 2;
+      points.add(Offset(x, y));
+    }
+
+    // Draw connecting line
+    final path = Path()..moveTo(points[0].dx, points[0].dy);
+    for (int i = 1; i < points.length; i++) {
+      path.lineTo(points[i].dx, points[i].dy);
+    }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = const Color(0xFF30363D)
+        ..strokeWidth = 1.5
+        ..style = PaintingStyle.stroke,
+    );
+
+    // Draw dots colored by success/failure
+    for (int i = 0; i < runs.length; i++) {
+      final color = runs[i].success
+          ? AppTheme.colorSuccess
+          : AppTheme.colorError;
+      canvas.drawCircle(points[i], 3, Paint()..color = color);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SparklinePainter old) =>
+      old.runs.length != runs.length ||
+      (runs.isNotEmpty && old.runs.last.id != runs.last.id);
 }
