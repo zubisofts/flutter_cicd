@@ -1,0 +1,48 @@
+# Template Fastfile — copy this to your mobile app repo's fastlane/Fastfile
+# FlutterCI injects environment variables before calling each lane.
+
+default_platform(:ios)
+
+platform :ios do
+  desc "Upload to TestFlight"
+  lane :upload_testflight do
+    # Variables injected by FlutterCI:
+    # BUNDLE_ID, FL_VERSION_NUMBER, FL_BUILD_NUMBER,
+    # APPLE_TEAM_ID, MATCH_APP_IDENTIFIER, ARTIFACTS_DIR
+
+    build_app(
+      workspace: "ios/Runner.xcworkspace",
+      scheme: "Runner",
+      export_method: "app-store",
+      output_directory: ENV["ARTIFACTS_DIR"],
+      ipa_name: "Runner.ipa",
+    )
+
+    upload_to_testflight(
+      ipa: "#{ENV["ARTIFACTS_DIR"]}/Runner.ipa",
+      skip_waiting_for_build_processing: true,
+      team_id: ENV["APPLE_TEAM_ID"],
+    )
+  end
+end
+
+platform :android do
+  desc "Upload to Play Store"
+  lane :upload_playstore do
+    # Variables injected by FlutterCI:
+    # AAB_PATH, ANDROID_PACKAGE_NAME,
+    # PLAY_TRACK, ROLLOUT_PERCENTAGE, PLAY_STORE_JSON_KEY
+
+    upload_to_play_store(
+      track: ENV["PLAY_TRACK"],
+      aab: ENV["AAB_PATH"],
+      rollout: (ENV["ROLLOUT_PERCENTAGE"].to_f / 100).to_s,
+      json_key: ENV["PLAY_STORE_JSON_KEY"],
+      package_name: ENV["ANDROID_PACKAGE_NAME"],
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+    )
+  end
+end
