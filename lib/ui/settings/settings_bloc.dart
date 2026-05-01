@@ -4,7 +4,9 @@ import 'package:equatable/equatable.dart';
 import '../../config/config_repository.dart';
 import '../../services/credential_store.dart';
 import '../../services/email_notification_service.dart';
+import '../../services/google_chat_notification_service.dart';
 import '../../services/slack_notification_service.dart';
+import '../../services/teams_notification_service.dart';
 
 // ─── Events ───────────────────────────────────────────────────────────────
 
@@ -103,6 +105,34 @@ class SlackTestRequested extends SettingsEvent {
   List<Object?> get props => [config.webhookUrl];
 }
 
+class TeamsConfigSaved extends SettingsEvent {
+  final TeamsConfig config;
+  const TeamsConfigSaved(this.config);
+  @override
+  List<Object?> get props => [config.webhookUrl];
+}
+
+class TeamsTestRequested extends SettingsEvent {
+  final TeamsConfig config;
+  const TeamsTestRequested(this.config);
+  @override
+  List<Object?> get props => [config.webhookUrl];
+}
+
+class GoogleChatConfigSaved extends SettingsEvent {
+  final GoogleChatConfig config;
+  const GoogleChatConfigSaved(this.config);
+  @override
+  List<Object?> get props => [config.webhookUrl];
+}
+
+class GoogleChatTestRequested extends SettingsEvent {
+  final GoogleChatConfig config;
+  const GoogleChatTestRequested(this.config);
+  @override
+  List<Object?> get props => [config.webhookUrl];
+}
+
 // ─── State ────────────────────────────────────────────────────────────────
 
 class SettingsState extends Equatable {
@@ -128,6 +158,10 @@ class SettingsState extends Equatable {
   final bool isSendingTestEmail;
   final SlackConfig slackConfig;
   final bool isSendingSlackTest;
+  final TeamsConfig teamsConfig;
+  final bool isSendingTeamsTest;
+  final GoogleChatConfig googleChatConfig;
+  final bool isSendingGoogleChatTest;
   final bool isLoading;
   final String? savedMessage;
   final String? error;
@@ -160,6 +194,10 @@ class SettingsState extends Equatable {
     this.isSendingTestEmail = false,
     this.slackConfig = const SlackConfig(),
     this.isSendingSlackTest = false,
+    this.teamsConfig = const TeamsConfig(),
+    this.isSendingTeamsTest = false,
+    this.googleChatConfig = const GoogleChatConfig(),
+    this.isSendingGoogleChatTest = false,
     this.isLoading = false,
     this.savedMessage,
     this.error,
@@ -185,6 +223,10 @@ class SettingsState extends Equatable {
     bool? isSendingTestEmail,
     SlackConfig? slackConfig,
     bool? isSendingSlackTest,
+    TeamsConfig? teamsConfig,
+    bool? isSendingTeamsTest,
+    GoogleChatConfig? googleChatConfig,
+    bool? isSendingGoogleChatTest,
     bool? isLoading,
     String? savedMessage,
     String? error,
@@ -212,6 +254,11 @@ class SettingsState extends Equatable {
         isSendingTestEmail: isSendingTestEmail ?? this.isSendingTestEmail,
         slackConfig: slackConfig ?? this.slackConfig,
         isSendingSlackTest: isSendingSlackTest ?? this.isSendingSlackTest,
+        teamsConfig: teamsConfig ?? this.teamsConfig,
+        isSendingTeamsTest: isSendingTeamsTest ?? this.isSendingTeamsTest,
+        googleChatConfig: googleChatConfig ?? this.googleChatConfig,
+        isSendingGoogleChatTest:
+            isSendingGoogleChatTest ?? this.isSendingGoogleChatTest,
         isLoading: isLoading ?? this.isLoading,
         savedMessage: clearSaved ? null : (savedMessage ?? this.savedMessage),
         error: clearError ? null : (error ?? this.error),
@@ -241,6 +288,12 @@ class SettingsState extends Equatable {
         slackConfig.enabled,
         slackConfig.webhookUrl,
         isSendingSlackTest,
+        teamsConfig.enabled,
+        teamsConfig.webhookUrl,
+        isSendingTeamsTest,
+        googleChatConfig.enabled,
+        googleChatConfig.webhookUrl,
+        isSendingGoogleChatTest,
         isLoading,
         savedMessage,
         error,
@@ -254,10 +307,17 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   final ConfigRepository _configRepo;
   final EmailNotificationService _emailService;
   final SlackNotificationService _slackService;
+  final TeamsNotificationService _teamsService;
+  final GoogleChatNotificationService _googleChatService;
 
   SettingsBloc(
-      this._creds, this._configRepo, this._emailService, this._slackService)
-      : super(const SettingsState()) {
+    this._creds,
+    this._configRepo,
+    this._emailService,
+    this._slackService,
+    this._teamsService,
+    this._googleChatService,
+  ) : super(const SettingsState()) {
     on<SettingsOpened>(_onOpened);
     on<SettingsEnvChanged>(_onEnvChanged);
     on<AndroidSigningSaved>(_onAndroidSigningSaved);
@@ -269,6 +329,10 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<EmailTestRequested>(_onEmailTestRequested);
     on<SlackConfigSaved>(_onSlackConfigSaved);
     on<SlackTestRequested>(_onSlackTestRequested);
+    on<TeamsConfigSaved>(_onTeamsConfigSaved);
+    on<TeamsTestRequested>(_onTeamsTestRequested);
+    on<GoogleChatConfigSaved>(_onGoogleChatConfigSaved);
+    on<GoogleChatTestRequested>(_onGoogleChatTestRequested);
   }
 
   Future<void> _onOpened(
@@ -298,6 +362,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       final firebaseToken = await _creds.loadFirebaseToken();
       final smtpConfig = await _creds.loadSmtpConfig();
       final slackConfig = await _creds.loadSlackConfig();
+      final teamsConfig = await _creds.loadTeamsConfig();
+      final googleChatConfig = await _creds.loadGoogleChatConfig();
       final envConfig = await _configRepo.loadEnv(projectId, envName);
 
       emit(state.copyWith(
@@ -318,6 +384,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
             '',
         smtpConfig: smtpConfig,
         slackConfig: slackConfig,
+        teamsConfig: teamsConfig,
+        googleChatConfig: googleChatConfig,
         isLoading: false,
         clearError: true,
       ));
@@ -505,6 +573,74 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       emit(state.copyWith(
         isSendingSlackTest: false,
         error: 'Failed to post to Slack: $e',
+      ));
+    }
+  }
+
+  Future<void> _onTeamsConfigSaved(
+      TeamsConfigSaved event, Emitter<SettingsState> emit) async {
+    try {
+      await _creds.saveTeamsConfig(event.config);
+      emit(state.copyWith(
+        teamsConfig: event.config,
+        savedMessage: 'Teams settings saved to Keychain',
+      ));
+      await Future.delayed(const Duration(seconds: 3));
+      emit(state.copyWith(clearSaved: true));
+    } catch (e) {
+      emit(state.copyWith(error: e.toString()));
+    }
+  }
+
+  Future<void> _onTeamsTestRequested(
+      TeamsTestRequested event, Emitter<SettingsState> emit) async {
+    emit(state.copyWith(isSendingTeamsTest: true, clearError: true));
+    try {
+      await _teamsService.sendTestMessage(event.config.webhookUrl);
+      emit(state.copyWith(
+        isSendingTeamsTest: false,
+        savedMessage: 'Test message posted to Teams',
+      ));
+      await Future.delayed(const Duration(seconds: 3));
+      emit(state.copyWith(clearSaved: true));
+    } catch (e) {
+      emit(state.copyWith(
+        isSendingTeamsTest: false,
+        error: 'Failed to post to Teams: $e',
+      ));
+    }
+  }
+
+  Future<void> _onGoogleChatConfigSaved(
+      GoogleChatConfigSaved event, Emitter<SettingsState> emit) async {
+    try {
+      await _creds.saveGoogleChatConfig(event.config);
+      emit(state.copyWith(
+        googleChatConfig: event.config,
+        savedMessage: 'Google Chat settings saved to Keychain',
+      ));
+      await Future.delayed(const Duration(seconds: 3));
+      emit(state.copyWith(clearSaved: true));
+    } catch (e) {
+      emit(state.copyWith(error: e.toString()));
+    }
+  }
+
+  Future<void> _onGoogleChatTestRequested(
+      GoogleChatTestRequested event, Emitter<SettingsState> emit) async {
+    emit(state.copyWith(isSendingGoogleChatTest: true, clearError: true));
+    try {
+      await _googleChatService.sendTestMessage(event.config.webhookUrl);
+      emit(state.copyWith(
+        isSendingGoogleChatTest: false,
+        savedMessage: 'Test message posted to Google Chat',
+      ));
+      await Future.delayed(const Duration(seconds: 3));
+      emit(state.copyWith(clearSaved: true));
+    } catch (e) {
+      emit(state.copyWith(
+        isSendingGoogleChatTest: false,
+        error: 'Failed to post to Google Chat: $e',
       ));
     }
   }

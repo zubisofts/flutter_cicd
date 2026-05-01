@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gap/gap.dart';
@@ -159,7 +161,10 @@ class _ExecutionScreenState extends State<ExecutionScreen> {
                 ),
                 if (state.phase == ExecutionPhase.completed &&
                     state.overallSuccess != null)
-                  _CompletionBanner(success: state.overallSuccess!),
+                  _CompletionBanner(
+                    success: state.overallSuccess!,
+                    artifacts: state.artifacts,
+                  ),
               ],
             ),
           );
@@ -311,38 +316,103 @@ class _ActionBar extends StatelessWidget {
 
 class _CompletionBanner extends StatelessWidget {
   final bool success;
-  const _CompletionBanner({required this.success});
+  final Map<String, String> artifacts;
+
+  const _CompletionBanner({
+    required this.success,
+    this.artifacts = const {},
+  });
 
   @override
   Widget build(BuildContext context) {
+    final color = success ? AppTheme.colorSuccess : AppTheme.colorError;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-      color: success
-          ? AppTheme.colorSuccess.withValues(alpha:0.15)
-          : AppTheme.colorError.withValues(alpha:0.15),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+      color: color.withValues(alpha: 0.15),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            success ? Icons.check_circle : Icons.cancel,
-            size: 16,
-            color: success ? AppTheme.colorSuccess : AppTheme.colorError,
+          Row(
+            children: [
+              Icon(
+                success ? Icons.check_circle : Icons.cancel,
+                size: 16,
+                color: color,
+              ),
+              const Gap(8),
+              Text(
+                success
+                    ? 'Pipeline completed successfully'
+                    : 'Pipeline failed — check logs above',
+                style: TextStyle(
+                  color: color,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
-          const Gap(8),
-          Text(
-            success
-                ? 'Pipeline completed successfully'
-                : 'Pipeline failed — check logs above',
-            style: TextStyle(
-              color: success ? AppTheme.colorSuccess : AppTheme.colorError,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
+          if (artifacts.isNotEmpty) ...[
+            const Gap(8),
+            Wrap(
+              spacing: 16,
+              runSpacing: 6,
+              children: [
+                for (final entry in artifacts.entries)
+                  _ArtifactRow(platform: entry.key, path: entry.value),
+              ],
             ),
-          ),
+          ],
         ],
       ),
+    );
+  }
+}
+
+class _ArtifactRow extends StatelessWidget {
+  final String platform;
+  final String path;
+
+  const _ArtifactRow({required this.platform, required this.path});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.folder_open, size: 13, color: Color(0xFF8B949E)),
+        const Gap(4),
+        Text(
+          platform,
+          style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+        ),
+        const Gap(8),
+        TextButton.icon(
+          onPressed: () =>
+              Process.run('open', ['-R', path]).ignore(),
+          icon: const Icon(Icons.open_in_new, size: 11),
+          label: const Text('Show in Finder'),
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF58A6FF),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            textStyle: const TextStyle(fontSize: 11),
+          ),
+        ),
+        TextButton.icon(
+          onPressed: () =>
+              Clipboard.setData(ClipboardData(text: path)).ignore(),
+          icon: const Icon(Icons.copy, size: 11),
+          label: const Text('Copy Path'),
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF8B949E),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            textStyle: const TextStyle(fontSize: 11),
+          ),
+        ),
+      ],
     );
   }
 }

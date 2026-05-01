@@ -21,6 +21,8 @@ class RunRequest {
   final int buildNumber;
   final List<String> platforms;
   final List<String> targets;
+  /// Step IDs to skip because they already succeeded in a prior run.
+  final Set<String> skipStepIds;
 
   const RunRequest({
     required this.projectId,
@@ -31,6 +33,7 @@ class RunRequest {
     required this.buildNumber,
     required this.platforms,
     required this.targets,
+    this.skipStepIds = const {},
   });
 }
 
@@ -54,6 +57,8 @@ class PipelineRunResult {
   final String? errorMessage;
   final Duration totalDuration;
   final Map<String, StepResult> stepResults;
+  /// Persistent paths for build artifacts, keyed by platform.
+  final Map<String, String> artifacts;
 
   const PipelineRunResult({
     required this.runId,
@@ -61,6 +66,7 @@ class PipelineRunResult {
     this.errorMessage,
     required this.totalDuration,
     required this.stepResults,
+    this.artifacts = const {},
   });
 }
 
@@ -171,6 +177,18 @@ class PipelineRunner {
           continue;
         }
 
+        // Skip steps that already succeeded in a prior run (resume feature).
+        if (request.skipStepIds.contains(stepDef.id)) {
+          logSink.addRaw(stepDef.id, LogLevel.debug,
+              'Step "${stepDef.id}" skipped (resumed from prior success)');
+          _stepUpdates.add(StepUpdate(
+            stepId: stepDef.id,
+            status: StepStatus.skipped,
+          ));
+          stepResults[stepDef.id] = StepResult.success();
+          continue;
+        }
+
         final step = _registry.resolve(stepDef);
 
         if (!step.shouldExecute(ctx)) {
@@ -243,6 +261,7 @@ class PipelineRunner {
               errorMessage: e.message,
               totalDuration: DateTime.now().difference(start),
               stepResults: stepResults,
+              artifacts: await _copyArtifacts(ctx, runId, request.platforms),
             );
           }
         } on PipelineAbortedException {
@@ -275,6 +294,7 @@ class PipelineRunner {
               errorMessage: message,
               totalDuration: DateTime.now().difference(start),
               stepResults: stepResults,
+              artifacts: await _copyArtifacts(ctx, runId, request.platforms),
             );
           }
         }
@@ -295,11 +315,13 @@ class PipelineRunner {
       logSink.addRaw('pipeline', LogLevel.info,
           '══════════════════════════════════════════');
 
+      final artifacts = await _copyArtifacts(ctx, runId, request.platforms);
       return PipelineRunResult(
         runId: runId,
         success: overallSuccess,
         totalDuration: totalDuration,
         stepResults: stepResults,
+        artifacts: artifacts,
       );
     } finally {
       _currentContext = null;
@@ -354,6 +376,27 @@ class PipelineRunner {
         await old.delete(recursive: true);
       } catch (_) {}
     }
+  }
+
+  /// Copies build artifacts out of the (soon-to-be-deleted) workspace to
+  /// a persistent location at ~/.cicd/artifacts/{runId}/.
+  Future<Map<String, String>> _copyArtifacts(
+      PipelineContext ctx, String runId, List<String> platforms) async {
+    final result = <String, String>{};
+    final destDir = p.join(_baseDir, 'artifacts', runId);
+    for (final platform in platforms) {
+      final srcPath = ctx.artifactPath(platform);
+      if (srcPath == null) continue;
+      final src = File(srcPath);
+      if (!await src.exists()) continue;
+      try {
+        await Directory(destDir).create(recursive: true);
+        final dest = p.join(destDir, p.basename(srcPath));
+        await src.copy(dest);
+        result[platform] = dest;
+      } catch (_) {}
+    }
+    return result;
   }
 
   String _generateRunId() {

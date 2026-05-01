@@ -7,7 +7,10 @@ import '../engine/pipeline_runner.dart';
 import '../engine/step_registry.dart';
 import '../services/credential_store.dart';
 import '../services/email_notification_service.dart';
+import '../services/google_chat_notification_service.dart';
 import '../services/slack_notification_service.dart';
+import '../services/teams_notification_service.dart';
+import '../services/tray_service.dart';
 import '../ui/execution/execution_bloc.dart';
 
 final getIt = GetIt.instance;
@@ -19,6 +22,13 @@ void setupDependencies() {
       () => EmailNotificationService(getIt<CredentialStore>()));
   getIt.registerLazySingleton<SlackNotificationService>(
       () => SlackNotificationService(getIt<CredentialStore>()));
+  getIt.registerLazySingleton<TeamsNotificationService>(
+      () => TeamsNotificationService(getIt<CredentialStore>()));
+  getIt.registerLazySingleton<GoogleChatNotificationService>(
+      () => GoogleChatNotificationService(getIt<CredentialStore>()));
+
+  // Tray (menu bar status icon)
+  getIt.registerLazySingleton<TrayService>(() => TrayService());
 
   // Config
   getIt.registerLazySingleton<ConfigRepository>(() => ConfigRepository());
@@ -50,6 +60,9 @@ void setupDependencies() {
       getIt<RunRepository>(),
       getIt<EmailNotificationService>(),
       getIt<SlackNotificationService>(),
+      getIt<TeamsNotificationService>(),
+      getIt<GoogleChatNotificationService>(),
+      getIt<TrayService>(),
     ),
   );
 }

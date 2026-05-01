@@ -425,6 +425,7 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
     ).timeout(const Duration(seconds: 15), onTimeout: () {
       return ProcessResult(0, 1, '', 'timeout');
     }).then((result) {
+      if (isClosed) return;
       if (result.exitCode != 0) {
         add(const RefsFetched(branches: [], tags: []));
         return;
@@ -453,6 +454,7 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
 
       add(RefsFetched(branches: branches, tags: tags));
     }).catchError((_) {
+      if (isClosed) return;
       add(const RefsFetched(branches: [], tags: []));
     });
   }

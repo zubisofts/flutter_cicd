@@ -6,7 +6,9 @@ import '../../config/config_repository.dart';
 import '../../di/injection.dart';
 import '../../services/credential_store.dart';
 import '../../services/email_notification_service.dart';
+import '../../services/google_chat_notification_service.dart';
 import '../../services/slack_notification_service.dart';
+import '../../services/teams_notification_service.dart';
 import '../shell/app_theme.dart';
 import '../setup/widgets/env_selector.dart';
 import '../setup/widgets/section_card.dart';
@@ -30,6 +32,8 @@ class SettingsScreen extends StatelessWidget {
         getIt<ConfigRepository>(),
         getIt<EmailNotificationService>(),
         getIt<SlackNotificationService>(),
+        getIt<TeamsNotificationService>(),
+        getIt<GoogleChatNotificationService>(),
       )..add(SettingsOpened(projectId, initialEnv)),
       child: const _SettingsContent(),
     );
@@ -72,10 +76,16 @@ class _SettingsContent extends StatelessWidget {
                                   _FirebaseCard(state: state),
                                   const Gap(12),
                                   // Email notifications — hidden until ready
-                                  // Remove the `if (false)` to re-enable.
                                   if (false) _EmailNotificationCard(state: state),
                                   const Gap(12),
                                   _SlackNotificationCard(state: state),
+                                  // Teams/Google Chat — hidden (team doesn't use these yet)
+                                  if (false) ...[
+                                    const Gap(12),
+                                    _TeamsNotificationCard(state: state),
+                                    const Gap(12),
+                                    _GoogleChatNotificationCard(state: state),
+                                  ],
                                 ],
                               ),
                             ),
@@ -1160,6 +1170,296 @@ class _SlackNotificationCardState extends State<_SlackNotificationCard> {
               ElevatedButton.icon(
                 onPressed: () =>
                     bloc.add(SlackConfigSaved(_currentConfig())),
+                icon: const Icon(Icons.save, size: 14),
+                label: const Text('Save to Keychain'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Teams Notifications ──────────────────────────────────────────────────
+
+class _TeamsNotificationCard extends StatefulWidget {
+  final SettingsState state;
+  const _TeamsNotificationCard({required this.state});
+
+  @override
+  State<_TeamsNotificationCard> createState() => _TeamsNotificationCardState();
+}
+
+class _TeamsNotificationCardState extends State<_TeamsNotificationCard> {
+  late bool _enabled;
+  late bool _showUrl;
+  late TextEditingController _urlCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _showUrl = false;
+    _initFrom(widget.state.teamsConfig);
+  }
+
+  @override
+  void didUpdateWidget(_TeamsNotificationCard old) {
+    super.didUpdateWidget(old);
+    final cfg = widget.state.teamsConfig;
+    final oldCfg = old.state.teamsConfig;
+    if (cfg.webhookUrl != oldCfg.webhookUrl || cfg.enabled != oldCfg.enabled) {
+      _initFrom(cfg);
+    }
+  }
+
+  void _initFrom(TeamsConfig cfg) {
+    _enabled = cfg.enabled;
+    _urlCtrl = TextEditingController(text: cfg.webhookUrl);
+  }
+
+  @override
+  void dispose() {
+    _urlCtrl.dispose();
+    super.dispose();
+  }
+
+  TeamsConfig _currentConfig() =>
+      TeamsConfig(enabled: _enabled, webhookUrl: _urlCtrl.text.trim());
+
+  @override
+  Widget build(BuildContext context) {
+    final bloc = context.read<SettingsBloc>();
+    final isTesting = widget.state.isSendingTeamsTest;
+    final isConfigured = widget.state.teamsConfig.isConfigured;
+
+    return SectionCard(
+      title: 'MICROSOFT TEAMS',
+      trailing: isConfigured && widget.state.teamsConfig.enabled
+          ? const Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.notifications_active,
+                  size: 12, color: AppTheme.colorSuccess),
+              Gap(4),
+              Text('Enabled',
+                  style: TextStyle(color: AppTheme.colorSuccess, fontSize: 11)),
+            ])
+          : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Post to Teams on build completion',
+                  style: TextStyle(color: Color(0xFFE6EDF3), fontSize: 13)),
+              Switch(
+                value: _enabled,
+                onChanged: (v) => setState(() => _enabled = v),
+                activeColor: AppTheme.colorSuccess,
+              ),
+            ],
+          ),
+          const Gap(10),
+          TextField(
+            controller: _urlCtrl,
+            obscureText: !_showUrl,
+            style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 13),
+            decoration: InputDecoration(
+              labelText: 'Incoming Webhook URL',
+              hintText: 'https://xxx.webhook.office.com/webhookb2/…',
+              prefixIcon: const Icon(Icons.webhook,
+                  size: 16, color: Color(0xFF8B949E)),
+              suffixIcon: IconButton(
+                icon: Icon(
+                    _showUrl ? Icons.visibility_off : Icons.visibility,
+                    size: 16,
+                    color: const Color(0xFF8B949E)),
+                onPressed: () => setState(() => _showUrl = !_showUrl),
+              ),
+            ),
+          ),
+          const Gap(10),
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, size: 13, color: Color(0xFF8B949E)),
+              Gap(6),
+              Expanded(
+                child: Text(
+                  'Create an Incoming Webhook connector in your Teams channel. '
+                  'The URL is stored in macOS Keychain.',
+                  style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+          const Gap(12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              OutlinedButton.icon(
+                onPressed: isTesting
+                    ? null
+                    : () => bloc.add(TeamsTestRequested(_currentConfig())),
+                icon: isTesting
+                    ? const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.send, size: 14),
+                label: Text(isTesting ? 'Posting…' : 'Send Test'),
+              ),
+              const Gap(8),
+              ElevatedButton.icon(
+                onPressed: () =>
+                    bloc.add(TeamsConfigSaved(_currentConfig())),
+                icon: const Icon(Icons.save, size: 14),
+                label: const Text('Save to Keychain'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Google Chat Notifications ────────────────────────────────────────────
+
+class _GoogleChatNotificationCard extends StatefulWidget {
+  final SettingsState state;
+  const _GoogleChatNotificationCard({required this.state});
+
+  @override
+  State<_GoogleChatNotificationCard> createState() =>
+      _GoogleChatNotificationCardState();
+}
+
+class _GoogleChatNotificationCardState
+    extends State<_GoogleChatNotificationCard> {
+  late bool _enabled;
+  late bool _showUrl;
+  late TextEditingController _urlCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _showUrl = false;
+    _initFrom(widget.state.googleChatConfig);
+  }
+
+  @override
+  void didUpdateWidget(_GoogleChatNotificationCard old) {
+    super.didUpdateWidget(old);
+    final cfg = widget.state.googleChatConfig;
+    final oldCfg = old.state.googleChatConfig;
+    if (cfg.webhookUrl != oldCfg.webhookUrl || cfg.enabled != oldCfg.enabled) {
+      _initFrom(cfg);
+    }
+  }
+
+  void _initFrom(GoogleChatConfig cfg) {
+    _enabled = cfg.enabled;
+    _urlCtrl = TextEditingController(text: cfg.webhookUrl);
+  }
+
+  @override
+  void dispose() {
+    _urlCtrl.dispose();
+    super.dispose();
+  }
+
+  GoogleChatConfig _currentConfig() =>
+      GoogleChatConfig(enabled: _enabled, webhookUrl: _urlCtrl.text.trim());
+
+  @override
+  Widget build(BuildContext context) {
+    final bloc = context.read<SettingsBloc>();
+    final isTesting = widget.state.isSendingGoogleChatTest;
+    final isConfigured = widget.state.googleChatConfig.isConfigured;
+
+    return SectionCard(
+      title: 'GOOGLE CHAT',
+      trailing: isConfigured && widget.state.googleChatConfig.enabled
+          ? const Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.notifications_active,
+                  size: 12, color: AppTheme.colorSuccess),
+              Gap(4),
+              Text('Enabled',
+                  style: TextStyle(color: AppTheme.colorSuccess, fontSize: 11)),
+            ])
+          : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Post to Google Chat on build completion',
+                  style: TextStyle(color: Color(0xFFE6EDF3), fontSize: 13)),
+              Switch(
+                value: _enabled,
+                onChanged: (v) => setState(() => _enabled = v),
+                activeColor: AppTheme.colorSuccess,
+              ),
+            ],
+          ),
+          const Gap(10),
+          TextField(
+            controller: _urlCtrl,
+            obscureText: !_showUrl,
+            style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 13),
+            decoration: InputDecoration(
+              labelText: 'Webhook URL',
+              hintText: 'https://chat.googleapis.com/v1/spaces/…',
+              prefixIcon: const Icon(Icons.webhook,
+                  size: 16, color: Color(0xFF8B949E)),
+              suffixIcon: IconButton(
+                icon: Icon(
+                    _showUrl ? Icons.visibility_off : Icons.visibility,
+                    size: 16,
+                    color: const Color(0xFF8B949E)),
+                onPressed: () => setState(() => _showUrl = !_showUrl),
+              ),
+            ),
+          ),
+          const Gap(10),
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, size: 13, color: Color(0xFF8B949E)),
+              Gap(6),
+              Expanded(
+                child: Text(
+                  'Add a Webhook in your Google Chat space: '
+                  'Apps & integrations → Webhooks → Add Webhook. '
+                  'The URL is stored in macOS Keychain.',
+                  style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+          const Gap(12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              OutlinedButton.icon(
+                onPressed: isTesting
+                    ? null
+                    : () =>
+                        bloc.add(GoogleChatTestRequested(_currentConfig())),
+                icon: isTesting
+                    ? const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.send, size: 14),
+                label: Text(isTesting ? 'Posting…' : 'Send Test'),
+              ),
+              const Gap(8),
+              ElevatedButton.icon(
+                onPressed: () =>
+                    bloc.add(GoogleChatConfigSaved(_currentConfig())),
                 icon: const Icon(Icons.save, size: 14),
                 label: const Text('Save to Keychain'),
               ),
