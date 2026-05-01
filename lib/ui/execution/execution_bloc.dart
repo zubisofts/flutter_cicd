@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:io';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../engine/pipeline_runner.dart';
@@ -174,12 +175,40 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
     on<ExecutionReset>(_onReset);
   }
 
+  /// Mirrors the platform/target condition logic from [PipelineStep.shouldExecute]
+  /// so we can pre-filter the display list before execution starts.
+  bool _stepWillRun(StepDefinition step, RunRequest request) {
+    final cond = step.condition;
+    if (cond == null || cond.isEmpty) return true;
+    switch (cond) {
+      case 'android':
+        return request.platforms.contains('android');
+      case 'ios':
+        return request.platforms.contains('ios');
+      case 'firebase_android':
+        return request.targets.contains('firebase_android') &&
+            request.platforms.contains('android');
+      case 'firebase_ios':
+        return request.targets.contains('firebase_ios') &&
+            request.platforms.contains('ios');
+      case 'testflight':
+        return request.targets.contains('testflight') &&
+            request.platforms.contains('ios');
+      case 'playstore':
+        return request.targets.contains('playstore') &&
+            request.platforms.contains('android');
+      default:
+        return true;
+    }
+  }
+
   Future<void> _onStarted(
       ExecutionStarted event, Emitter<ExecutionState> emit) async {
     _currentRequest = event.request;
     _currentSteps = event.steps;
 
     final initialSteps = event.steps
+        .where((s) => _stepWillRun(s, event.request))
         .map((s) => PipelineStepState(
               stepId: s.id,
               stepName: s.name,
@@ -278,6 +307,8 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
       errorMessage: event.result.errorMessage,
     ));
 
+    _sendBuildNotification(event.result.success, event.result.totalDuration);
+
     final req = _currentRequest;
     final result = event.result;
     if (req != null && result.runId.isNotEmpty) {
@@ -318,6 +349,29 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
       }
     }
   }
+
+  void _sendBuildNotification(bool success, Duration duration) {
+    final req = _currentRequest;
+    final label = req != null
+        ? '${req.projectName} · ${req.envName} · ${req.versionName}+${req.buildNumber}'
+        : '';
+    final statusText = success ? '✓ Build Succeeded' : '✗ Build Failed';
+    final body = label.isNotEmpty
+        ? '$label — ${_formatDuration(duration)}'
+        : _formatDuration(duration);
+    final script = 'display notification ${_osascriptQuote(body)} '
+        'with title "FlutterCI" '
+        'subtitle ${_osascriptQuote(statusText)}';
+    Process.run('osascript', ['-e', script]).ignore();
+  }
+
+  String _formatDuration(Duration d) {
+    if (d.inMinutes > 0) return '${d.inMinutes}m ${d.inSeconds % 60}s';
+    return '${d.inSeconds}s';
+  }
+
+  // Wraps a string in AppleScript double-quotes, escaping any embedded quotes.
+  String _osascriptQuote(String s) => '"${s.replaceAll('"', '\\"')}"';
 
   void _onAbortRequested(
       ExecutionAbortRequested event, Emitter<ExecutionState> emit) {
