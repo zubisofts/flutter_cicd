@@ -71,7 +71,9 @@ class _SettingsContent extends StatelessWidget {
                                   const Gap(12),
                                   _FirebaseCard(state: state),
                                   const Gap(12),
-                                  _EmailNotificationCard(state: state),
+                                  // Email notifications — hidden until ready
+                                  // Remove the `if (false)` to re-enable.
+                                  if (false) _EmailNotificationCard(state: state),
                                   const Gap(12),
                                   _SlackNotificationCard(state: state),
                                 ],
