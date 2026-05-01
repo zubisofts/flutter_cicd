@@ -39,11 +39,14 @@ class SlackNotificationService {
 
   Future<void> _post(String url, Map<String, dynamic> payload) async {
     final uri = Uri.parse(url);
+    final body = utf8.encode(jsonEncode(payload));
     final client = HttpClient();
     try {
       final req = await client.postUrl(uri);
-      req.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
-      req.write(jsonEncode(payload));
+      req.headers.set(
+          HttpHeaders.contentTypeHeader, 'application/json; charset=utf-8');
+      req.contentLength = body.length;
+      req.add(body);
       final res = await req.close();
       await res.drain<void>();
       if (res.statusCode != 200) {
