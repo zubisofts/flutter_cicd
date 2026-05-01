@@ -46,15 +46,10 @@ class _SideNav extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                Container(
+                Image.asset(
+                  'assets/app_icon.png',
                   width: 28,
                   height: 28,
-                  decoration: BoxDecoration(
-                    color: AppTheme.colorRunning,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Icon(Icons.rocket_launch,
-                      size: 16, color: Colors.black),
                 ),
                 const SizedBox(width: 10),
                 const Text(
