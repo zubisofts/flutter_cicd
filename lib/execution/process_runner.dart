@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'exceptions.dart';
 import 'log_line.dart';
 import 'log_sink.dart';
 
@@ -80,6 +81,9 @@ class ProcessRunner {
     /// When set, only lines for which this returns true are sent to [logSink].
     /// Lines are always captured in the result buffer regardless.
     bool Function(String line)? lineFilter,
+    /// When this future completes the running process is killed immediately
+    /// and [PipelineAbortedException] is thrown.
+    Future<void>? cancelSignal,
   }) async {
     // Merge: resolved shell PATH takes precedence over the app's inherited PATH
     final shellPath = await _shellPath();
@@ -107,6 +111,19 @@ class ProcessRunner {
     } catch (e) {
       throw Exception(
           'Failed to start process "${command.join(' ')}": $e');
+    }
+
+    // Register abort handler AFTER process starts so proc is always valid.
+    bool _killedByAbort = false;
+    if (cancelSignal != null) {
+      cancelSignal.then((_) {
+        _killedByAbort = true;
+        try { proc.kill(ProcessSignal.sigterm); } catch (_) {}
+        // Hard-kill if still alive after 5 s
+        Future<void>.delayed(const Duration(seconds: 5), () {
+          try { proc.kill(ProcessSignal.sigkill); } catch (_) {}
+        });
+      });
     }
 
     final stdoutDone = Completer<void>();
@@ -165,6 +182,8 @@ class ProcessRunner {
     } on TimeoutException {
       rethrow;
     }
+
+    if (_killedByAbort) throw const PipelineAbortedException();
 
     return ProcessResult(
       exitCode: exitCode,
