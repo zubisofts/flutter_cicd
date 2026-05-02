@@ -42,7 +42,8 @@ class FirebaseDistributeStep extends PipelineStep {
     final groups =
         env.distributionRules.firebase?.testerGroups.join(',') ?? '';
     final releaseNotes = _buildReleaseNotes(ctx);
-    final token = env.shellEnv['FIREBASE_TOKEN'] ?? '';
+    final serviceAccountPath =
+        env.shellEnv['GOOGLE_APPLICATION_CREDENTIALS'] ?? '';
 
     ctx.logSink.addRaw(id, LogLevel.info,
         'Uploading $platform artifact to Firebase App Distribution...');
@@ -62,7 +63,9 @@ class FirebaseDistributeStep extends PipelineStep {
       }
 
       final procEnv = <String, String>{};
-      if (token.isNotEmpty) procEnv['FIREBASE_TOKEN'] = token;
+      if (serviceAccountPath.isNotEmpty) {
+        procEnv['GOOGLE_APPLICATION_CREDENTIALS'] = serviceAccountPath;
+      }
 
       final result = await _runner.run(
         command: command,

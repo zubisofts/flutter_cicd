@@ -504,7 +504,7 @@ class _AppleCardState extends State<_AppleCard> {
   }
 }
 
-// ─── Firebase Token ───────────────────────────────────────────────────────
+// ─── Firebase + Play Store ────────────────────────────────────────────────
 
 class _FirebaseCard extends StatefulWidget {
   final SettingsState state;
@@ -515,14 +515,17 @@ class _FirebaseCard extends StatefulWidget {
 }
 
 class _FirebaseCardState extends State<_FirebaseCard> {
-  late TextEditingController _tokenCtrl;
+  late TextEditingController _serviceAccountCtrl;
+  late TextEditingController _playStoreCtrl;
   late TextEditingController _groupsCtrl;
-  bool _showToken = false;
 
   @override
   void initState() {
     super.initState();
-    _tokenCtrl = TextEditingController(text: widget.state.firebaseToken);
+    _serviceAccountCtrl = TextEditingController(
+        text: widget.state.firebaseServiceAccountPath);
+    _playStoreCtrl =
+        TextEditingController(text: widget.state.playStoreKeyPath);
     _groupsCtrl =
         TextEditingController(text: widget.state.firebaseTesterGroups);
   }
@@ -532,23 +535,36 @@ class _FirebaseCardState extends State<_FirebaseCard> {
     super.didUpdateWidget(old);
     if (old.state.selectedEnv != widget.state.selectedEnv ||
         old.state.projectId != widget.state.projectId) {
+      _serviceAccountCtrl.text = widget.state.firebaseServiceAccountPath;
+      _playStoreCtrl.text = widget.state.playStoreKeyPath;
       _groupsCtrl.text = widget.state.firebaseTesterGroups;
     }
   }
 
   @override
   void dispose() {
-    _tokenCtrl.dispose();
+    _serviceAccountCtrl.dispose();
+    _playStoreCtrl.dispose();
     _groupsCtrl.dispose();
     super.dispose();
   }
 
+  Future<void> _pickJson(TextEditingController ctrl) async {
+    const typeGroup = XTypeGroup(label: 'JSON', extensions: ['json']);
+    final file = await openFile(acceptedTypeGroups: [typeGroup]);
+    if (file != null && mounted) setState(() => ctrl.text = file.path);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final hasToken = widget.state.firebaseToken.isNotEmpty;
+    final bloc = context.read<SettingsBloc>();
+    final hasServiceAccount =
+        widget.state.firebaseServiceAccountPath.isNotEmpty;
+    final hasPlayStore = widget.state.playStoreKeyPath.isNotEmpty;
+
     return SectionCard(
-      title: 'FIREBASE',
-      trailing: hasToken
+      title: 'FIREBASE & PLAY STORE',
+      trailing: (hasServiceAccount || hasPlayStore)
           ? const Row(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.lock, size: 12, color: AppTheme.colorSuccess),
               Gap(4),
@@ -560,64 +576,127 @@ class _FirebaseCardState extends State<_FirebaseCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TextField(
-            controller: _tokenCtrl,
-            obscureText: !_showToken,
-            style: const TextStyle(
-                color: Color(0xFFE6EDF3), fontSize: 13),
-            decoration: InputDecoration(
-              labelText: 'Firebase CI token',
-              hintText: 'Run: firebase login:ci',
-              prefixIcon: const Icon(Icons.local_fire_department,
-                  size: 16, color: Color(0xFF8B949E)),
-              suffixIcon: IconButton(
-                icon: Icon(
-                    _showToken
-                        ? Icons.visibility_off
-                        : Icons.visibility,
-                    size: 16,
-                    color: const Color(0xFF8B949E)),
-                onPressed: () =>
-                    setState(() => _showToken = !_showToken),
+          // Firebase service account
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, size: 13, color: Color(0xFF8B949E)),
+              Gap(6),
+              Expanded(
+                child: Text(
+                  'Firebase App Distribution uses a Google Service Account '
+                  '(IAM role: Firebase App Distribution Admin). '
+                  'Create one in Google Cloud Console → IAM & Admin → Service Accounts.',
+                  style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                ),
               ),
-            ),
+            ],
           ),
-          const Gap(12),
+          const Gap(10),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _serviceAccountCtrl,
+                  readOnly: true,
+                  style: const TextStyle(
+                      color: Color(0xFFE6EDF3), fontSize: 13),
+                  decoration: const InputDecoration(
+                    labelText: 'Firebase service account JSON',
+                    hintText: 'Select a service account .json file',
+                    prefixIcon: Icon(Icons.local_fire_department,
+                        size: 16, color: Color(0xFF8B949E)),
+                  ),
+                ),
+              ),
+              const Gap(8),
+              OutlinedButton(
+                onPressed: () => _pickJson(_serviceAccountCtrl),
+                child: const Text('Browse'),
+              ),
+            ],
+          ),
+          const Gap(8),
           Align(
             alignment: Alignment.centerRight,
             child: ElevatedButton.icon(
-              onPressed: () {
-                context
-                    .read<SettingsBloc>()
-                    .add(FirebaseTokenSaved(_tokenCtrl.text.trim()));
-              },
+              onPressed: () => bloc.add(FirebaseServiceAccountSaved(
+                  _serviceAccountCtrl.text.trim())),
               icon: const Icon(Icons.save, size: 14),
               label: const Text('Save to Keychain'),
             ),
           ),
           const Divider(height: 24),
+          // Play Store service account
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, size: 13, color: Color(0xFF8B949E)),
+              Gap(6),
+              Expanded(
+                child: Text(
+                  'Play Store uploads use a Google Play service account JSON '
+                  '(Google Play Console → Setup → API access). '
+                  'Grant the account "Release Manager" permission.',
+                  style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+          const Gap(10),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _playStoreCtrl,
+                  readOnly: true,
+                  style: const TextStyle(
+                      color: Color(0xFFE6EDF3), fontSize: 13),
+                  decoration: const InputDecoration(
+                    labelText: 'Play Store service account JSON',
+                    hintText: 'Select a service account .json file',
+                    prefixIcon:
+                        Icon(Icons.shop, size: 16, color: Color(0xFF8B949E)),
+                  ),
+                ),
+              ),
+              const Gap(8),
+              OutlinedButton(
+                onPressed: () => _pickJson(_playStoreCtrl),
+                child: const Text('Browse'),
+              ),
+            ],
+          ),
+          const Gap(8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: ElevatedButton.icon(
+              onPressed: () => bloc
+                  .add(PlayStoreKeyPathSaved(_playStoreCtrl.text.trim())),
+              icon: const Icon(Icons.save, size: 14),
+              label: const Text('Save to Keychain'),
+            ),
+          ),
+          const Divider(height: 24),
+          // Tester groups (per-environment)
           TextField(
             controller: _groupsCtrl,
-            style: const TextStyle(
-                color: Color(0xFFE6EDF3), fontSize: 13),
+            style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 13),
             decoration: const InputDecoration(
-              labelText: 'Tester groups',
+              labelText: 'Firebase tester groups',
               hintText: 'internal-qa, beta-testers',
               helperText: 'Comma-separated Firebase group aliases',
-              prefixIcon: Icon(Icons.group,
-                  size: 16, color: Color(0xFF8B949E)),
+              prefixIcon:
+                  Icon(Icons.group, size: 16, color: Color(0xFF8B949E)),
             ),
-            onChanged: (v) => context
-                .read<SettingsBloc>()
-                .add(EnvConfigFieldUpdated('firebase_tester_groups', v)),
+            onChanged: (v) =>
+                bloc.add(EnvConfigFieldUpdated('firebase_tester_groups', v)),
           ),
           const Gap(12),
           Align(
             alignment: Alignment.centerRight,
             child: ElevatedButton.icon(
-              onPressed: () => context
-                  .read<SettingsBloc>()
-                  .add(const EnvConfigSaved()),
+              onPressed: () => bloc.add(const EnvConfigSaved()),
               icon: const Icon(Icons.save, size: 14),
               label: const Text('Save to YAML'),
             ),

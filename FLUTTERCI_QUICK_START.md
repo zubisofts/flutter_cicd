@@ -2,6 +2,10 @@
 
 This guide walks you through using the FlutterCI app day-to-day. No configuration or setup knowledge required — just how to navigate the app, kick off a build, and understand what you're looking at.
 
+> **Why this app exists:** We don't have a stable CI/CD pipeline for mobile in the org right now. FlutterCI fills that gap by running builds directly on your Mac using your locally installed tools (Flutter, Xcode, Fastlane, etc.). It is meant to be a practical stopgap until a proper CI infrastructure is in place.
+>
+> **Prerequisites:** Before using FlutterCI, make sure Flutter, Xcode, Android SDK, Fastlane, Firebase CLI, and Git are all installed and correctly configured on the Mac you're running it on.
+
 ---
 
 ## The App at a Glance
@@ -44,11 +48,13 @@ Fill in:
 
 These values are stamped into the app before it's compiled.
 
+> The app remembers the last build config you used for each project and prefills these fields automatically when you select a project. You only need to change them if they've moved on.
+
 ### Step 4 — Choose an environment
 
 Use the **Environment** selector to pick `dev`, `staging`, or `prod`. Each environment has its own signing certificates, distribution targets, and Firebase project pre-configured.
 
-> If you select **prod**, you'll be asked to confirm before the build starts.
+> If you select **prod**, you'll be asked to type a confirmation phrase before the build starts.
 
 ### Step 5 — Select platforms and targets
 
@@ -75,20 +81,31 @@ Each pipeline step appears as a row. The icon on the left shows its status:
 | Green check | Completed successfully |
 | Red X | Failed |
 | Grey dash | Skipped (not applicable for this run) |
+| Orange stop | Aborted |
+
+Each completed step shows how long it took. Very fast steps (under 1 second) show `< 1s`.
 
 Steps run top-to-bottom. If a step fails, subsequent steps that depend on it are skipped automatically.
 
+**Distribution steps always wait for all build artifacts** — if you're building both Android and iOS, Firebase/TestFlight/Play Store steps won't start until both the APK and the IPA are ready.
+
 ### Log viewer (right panel)
 
-Click any step row to see its full output. Logs stream live while the step is running. You can scroll back through the entire output.
+Logs stream live while the step is running. Log lines are colour-coded:
+- **White/grey** — informational output
+- **Green** — success messages
+- **Yellow** — warnings
+- **Red** — errors
+
+You can scroll back through the entire output, or click the copy icon to copy all logs to the clipboard.
 
 ### Aborting a build
 
-Click the **Abort** button in the top-right corner to cancel the current run. Any step that's already in progress will be allowed to finish its current operation before the pipeline stops.
+Click the **Abort** button at the bottom of the step list. The currently running process is terminated immediately — you won't have to wait for the current step to finish.
 
 ### When it finishes
 
-A banner appears at the top of the screen:
+A banner appears at the bottom of the screen:
 
 - **Green banner** — all steps passed. You'll see buttons to open the build artifact in Finder or copy its file path.
 - **Red banner** — something failed. The step that caused the failure is highlighted in the step list. Click it to read the logs and find out why.
@@ -112,13 +129,12 @@ The sparkline chart at the top shows the duration trend across your recent runs 
 ### Viewing a run's details
 
 Click any run in the list to see its details on the right:
-- Every step and its result
-- Duration per step
-- Full logs for any step (click the step row)
+- Every step and its result, with duration per step
+- Full logs for the run — with the same colour coding as the live view
 
 ### Retry
 
-Found on the right panel of any failed run. **Retry** starts a completely fresh run from scratch using the exact same settings (branch, version, environment, platforms).
+Found on the right panel of any run. **Retry** starts a completely fresh run from scratch using the exact same settings (branch, version, environment, platforms).
 
 ### Resume
 
@@ -157,7 +173,7 @@ Click the icon for a quick status summary, or to quit the app.
 
 ## Notifications
 
-If your team has Slack configured in Settings, you'll receive a message in the configured channel when a build finishes — success or failure — with a summary of the run.
+A macOS notification appears when each build finishes, showing the project, environment, version, and duration. If Slack is configured in Settings, a message is also posted to the configured channel.
 
 ---
 
@@ -167,3 +183,4 @@ If your team has Slack configured in Settings, you'll receive a message in the c
 - The menu bar icon always reflects the current state even when the app window is hidden.
 - If a build fails on a distribution step (Firebase, TestFlight) but the app compiled fine, use **Resume** — it skips the compile and goes straight to distribution.
 - Build numbers must be higher than the last submitted build for TestFlight and Play Store. FlutterCI does not auto-increment — you set it manually each run.
+- The `Install Dependencies` step runs `build_runner` automatically after `pub get`, so generated files (`.g.dart`, `.freezed.dart`) are always up to date before the build.
