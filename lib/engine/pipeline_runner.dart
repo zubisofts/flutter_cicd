@@ -202,10 +202,14 @@ class PipelineRunner {
           continue;
         }
 
-        // Check dependencies completed
+        // Check dependencies completed.
+        // Skipped steps (condition not met) count as satisfied — a distribution
+        // step that depends on both build_android and archive_ios should still
+        // run if the user only selected Android (archive_ios was skipped).
         final unmetDeps = stepDef.dependsOn.where((dep) {
           final depResult = stepResults[dep];
-          return depResult == null || !depResult.isSuccess;
+          return depResult == null ||
+              (!depResult.isSuccess && !depResult.isSkipped);
         }).toList();
 
         if (unmetDeps.isNotEmpty) {

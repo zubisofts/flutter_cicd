@@ -53,6 +53,7 @@ class FastlaneLaneStep extends PipelineStep {
       timeout: const Duration(minutes: 30),
       logSink: ctx.logSink,
       stepId: id,
+      cancelSignal: ctx.abortSignal,
     );
 
     if (!result.success) {

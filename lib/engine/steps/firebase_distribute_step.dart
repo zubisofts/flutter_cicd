@@ -71,6 +71,7 @@ class FirebaseDistributeStep extends PipelineStep {
         timeout: const Duration(minutes: 15),
         logSink: ctx.logSink,
         stepId: id,
+        cancelSignal: ctx.abortSignal,
       );
 
       if (!result.success) {

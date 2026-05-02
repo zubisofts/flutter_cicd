@@ -1,3 +1,4 @@
+import 'dart:async';
 import '../config/models/resolved_environment.dart';
 import '../execution/log_sink.dart';
 
@@ -10,6 +11,7 @@ class PipelineContext {
   final LogSink logSink;
   final Map<String, dynamic> state;
   bool _aborted = false;
+  final Completer<void> _abortCompleter = Completer<void>();
 
   PipelineContext({
     required this.runId,
@@ -23,7 +25,16 @@ class PipelineContext {
 
   bool get isAborted => _aborted;
 
-  void abort() => _aborted = true;
+  /// Completes when [abort] is called — pass to ProcessRunner as a cancel signal
+  /// so the running process is killed immediately rather than waiting to finish.
+  Future<void> get abortSignal => _abortCompleter.future;
+
+  void abort() {
+    if (!_aborted) {
+      _aborted = true;
+      _abortCompleter.complete();
+    }
+  }
 
   String? artifactPath(String platform) =>
       state['artifact_$platform'] as String?;

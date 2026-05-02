@@ -46,6 +46,7 @@ class GitCheckoutStep extends PipelineStep {
       workingDir: '/tmp',
       logSink: ctx.logSink,
       stepId: id,
+      cancelSignal: ctx.abortSignal,
     );
 
     if (!result.success) {
