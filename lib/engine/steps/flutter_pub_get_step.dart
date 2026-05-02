@@ -14,37 +14,67 @@ class FlutterPubGetStep extends PipelineStep {
 
   @override
   Future<StepResult> execute(PipelineContext ctx) async {
+    await _pubGet(ctx);
+    await _buildRunner(ctx);
+    return StepResult.success();
+  }
+
+  Future<void> _pubGet(PipelineContext ctx) async {
     ctx.logSink.addRaw(id, LogLevel.info, 'Running flutter pub get...');
 
-    Future<StepResult> run() async {
+    Future<StepResult> attempt() async {
       final result = await _runner.run(
         command: ['flutter', 'pub', 'get'],
         workingDir: ctx.workspaceDir,
         logSink: ctx.logSink,
         stepId: id,
       );
-
       if (!result.success) {
         throw RetryableStepException(
           stepId: id,
           message: 'flutter pub get failed (exit ${result.exitCode})',
         );
       }
-
       return StepResult.success();
     }
 
     if (retryPolicy != null) {
-      return await RetryController.withRetry(
-        fn: run,
+      await RetryController.withRetry(
+        fn: attempt,
         policy: retryPolicy!,
         logSink: ctx.logSink,
         stepId: id,
       );
+    } else {
+      final result = await _runner.run(
+        command: ['flutter', 'pub', 'get'],
+        workingDir: ctx.workspaceDir,
+        logSink: ctx.logSink,
+        stepId: id,
+      );
+      if (!result.success) {
+        throw FatalPipelineException(
+          stepId: id,
+          message: 'flutter pub get failed',
+          exitCode: result.exitCode,
+        );
+      }
     }
 
+    ctx.logSink.addRaw(id, LogLevel.success, 'Dependencies installed');
+  }
+
+  Future<void> _buildRunner(PipelineContext ctx) async {
+    ctx.logSink.addRaw(id, LogLevel.info, 'Running build_runner...');
+
     final result = await _runner.run(
-      command: ['flutter', 'pub', 'get'],
+      command: [
+        'dart',
+        'run',
+        'build_runner',
+        'build',
+        '--delete-conflicting-outputs',
+      ],
       workingDir: ctx.workspaceDir,
       logSink: ctx.logSink,
       stepId: id,
@@ -53,12 +83,11 @@ class FlutterPubGetStep extends PipelineStep {
     if (!result.success) {
       throw FatalPipelineException(
         stepId: id,
-        message: 'flutter pub get failed',
+        message: 'build_runner build failed',
         exitCode: result.exitCode,
       );
     }
 
-    ctx.logSink.addRaw(id, LogLevel.success, 'Dependencies installed');
-    return StepResult.success();
+    ctx.logSink.addRaw(id, LogLevel.success, 'Code generation complete');
   }
 }
