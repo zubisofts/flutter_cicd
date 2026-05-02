@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
-import 'dart:io';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:local_notifier/local_notifier.dart';
 import 'package:equatable/equatable.dart';
 import '../../engine/pipeline_runner.dart';
 import '../../engine/step_result.dart';
@@ -413,26 +413,22 @@ class ExecutionBloc extends Bloc<ExecutionEvent, ExecutionState> {
 
   void _sendBuildNotification(bool success, Duration duration) {
     final req = _currentRequest;
-    final label = req != null
-        ? '${req.projectName} · ${req.envName} · ${req.versionName}+${req.buildNumber}'
-        : '';
-    final statusText = success ? '✓ Build Succeeded' : '✗ Build Failed';
-    final body = label.isNotEmpty
-        ? '$label — ${_formatDuration(duration)}'
+    final subtitle = success ? 'Build Succeeded' : 'Build Failed';
+    final body = req != null
+        ? '${req.projectName} · ${req.envName} · ${req.versionName}+${req.buildNumber} — ${_formatDuration(duration)}'
         : _formatDuration(duration);
-    final script = 'display notification ${_osascriptQuote(body)} '
-        'with title "FlutterCI" '
-        'subtitle ${_osascriptQuote(statusText)}';
-    Process.run('osascript', ['-e', script]).ignore();
+    LocalNotification(
+      identifier: 'flutterci_build_result',
+      title: 'FlutterCI',
+      subtitle: subtitle,
+      body: body,
+    ).show();
   }
 
   String _formatDuration(Duration d) {
     if (d.inMinutes > 0) return '${d.inMinutes}m ${d.inSeconds % 60}s';
     return '${d.inSeconds}s';
   }
-
-  // Wraps a string in AppleScript double-quotes, escaping any embedded quotes.
-  String _osascriptQuote(String s) => '"${s.replaceAll('"', '\\"')}"';
 
   void _onAbortRequested(
       ExecutionAbortRequested event, Emitter<ExecutionState> emit) {
