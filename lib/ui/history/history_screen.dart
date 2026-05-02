@@ -415,12 +415,7 @@ class _RunDetail extends StatelessWidget {
                                       fontSize: 13)))
                           : LogViewer(
                               logs: logLines
-                                  .map((l) => LogLine(
-                                        stepId: '',
-                                        level: LogLevel.info,
-                                        message: l,
-                                        timestamp: DateTime.now(),
-                                      ))
+                                  .map(LogLine.fromLogFile)
                                   .toList(),
                               autoScroll: false,
                             ),
@@ -479,7 +474,7 @@ class _StepHistoryRow extends StatelessWidget {
           ),
           if (step.durationSeconds != null)
             Text(
-              '${step.durationSeconds}s',
+              step.durationSeconds! == 0 ? '< 1s' : '${step.durationSeconds}s',
               style: const TextStyle(
                   color: Color(0xFF8B949E), fontSize: 11),
             ),

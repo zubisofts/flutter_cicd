@@ -36,7 +36,9 @@ class EnvironmentResolver {
       projectId: projectId,
       envName: envName,
     );
-    final firebaseToken = await _credentials.loadFirebaseToken();
+    final firebaseServiceAccountPath =
+        await _credentials.loadFirebaseServiceAccountPath();
+    final playStoreKeyPath = await _credentials.loadPlayStoreKeyPath();
 
     // Merge signing config: Keychain values override YAML placeholders
     final resolvedSigning = androidCreds.isConfigured
@@ -52,7 +54,8 @@ class EnvironmentResolver {
       envConfig: envConfig,
       androidCreds: androidCreds,
       appleApiKey: appleApiKey,
-      firebaseToken: firebaseToken,
+      firebaseServiceAccountPath: firebaseServiceAccountPath,
+      playStoreKeyPath: playStoreKeyPath,
     );
 
     return ResolvedEnvironment(
@@ -81,7 +84,8 @@ class EnvironmentResolver {
     required EnvConfig envConfig,
     required AndroidSigningCredentials androidCreds,
     required AppleApiKey appleApiKey,
-    required String firebaseToken,
+    required String firebaseServiceAccountPath,
+    required String playStoreKeyPath,
   }) {
     final sysEnv = Platform.environment;
     return {
@@ -93,10 +97,11 @@ class EnvironmentResolver {
           ? androidCreds.keyPassword
           : sysEnv[envConfig.android.signing.keyPasswordEnv] ?? '',
 
-      // Firebase — Keychain first, then env var
-      'FIREBASE_TOKEN': firebaseToken.isNotEmpty
-          ? firebaseToken
-          : sysEnv['FIREBASE_TOKEN'] ?? '',
+      // Firebase App Distribution — service account JSON (ADC)
+      // Replaces the deprecated firebase login:ci token approach.
+      'GOOGLE_APPLICATION_CREDENTIALS': firebaseServiceAccountPath.isNotEmpty
+          ? firebaseServiceAccountPath
+          : sysEnv['GOOGLE_APPLICATION_CREDENTIALS'] ?? '',
 
       // App Store Connect API Key (replaces FASTLANE_USER/PASSWORD)
       'ASC_KEY_ID': appleApiKey.keyId.isNotEmpty
@@ -109,8 +114,10 @@ class EnvironmentResolver {
           ? base64Encode(utf8.encode(appleApiKey.privateKeyContent))
           : sysEnv['ASC_KEY_CONTENT'] ?? '',
 
-      // Play Store JSON key path (still env-var only — path, not secret)
-      'PLAY_STORE_JSON_KEY': sysEnv['PLAY_STORE_JSON_KEY'] ?? '',
+      // Play Store JSON key — Keychain path first, then env var
+      'PLAY_STORE_JSON_KEY': playStoreKeyPath.isNotEmpty
+          ? playStoreKeyPath
+          : sysEnv['PLAY_STORE_JSON_KEY'] ?? '',
     };
   }
 

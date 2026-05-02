@@ -64,13 +64,25 @@ class CredentialStore {
   }
 
   // ── Firebase ──────────────────────────────────────────────────────────────
+  // Uses a Google Service Account JSON file (GOOGLE_APPLICATION_CREDENTIALS).
+  // The legacy firebase login:ci token approach is deprecated by Google.
 
-  Future<void> saveFirebaseToken(String token) async {
-    await _storage.write(key: 'cicd.firebase.token', value: token);
+  Future<void> saveFirebaseServiceAccountPath(String path) async {
+    await _storage.write(key: 'cicd.firebase.service_account_path', value: path);
   }
 
-  Future<String> loadFirebaseToken() async {
-    return await _storage.read(key: 'cicd.firebase.token') ?? '';
+  Future<String> loadFirebaseServiceAccountPath() async {
+    return await _storage.read(key: 'cicd.firebase.service_account_path') ?? '';
+  }
+
+  // ── Play Store ────────────────────────────────────────────────────────────
+
+  Future<void> savePlayStoreKeyPath(String path) async {
+    await _storage.write(key: 'cicd.playstore.json_key_path', value: path);
+  }
+
+  Future<String> loadPlayStoreKeyPath() async {
+    return await _storage.read(key: 'cicd.playstore.json_key_path') ?? '';
   }
 
   // ── App Store Connect API Key (replaces username/password for TestFlight) ──

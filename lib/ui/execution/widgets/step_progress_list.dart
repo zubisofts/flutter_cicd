@@ -54,7 +54,8 @@ class _StepRow extends StatelessWidget {
     if (step.duration == null) return '';
     final d = step.duration!;
     if (d.inMinutes > 0) return '${d.inMinutes}m ${d.inSeconds % 60}s';
-    return '${d.inSeconds}s';
+    if (d.inSeconds > 0) return '${d.inSeconds}s';
+    return '< 1s';
   }
 
   @override
