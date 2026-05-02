@@ -86,7 +86,24 @@ class ConfigRepository {
     }
     final content = await file.readAsString();
     final map = loadYaml(content) as Map;
-    return PipelineDefinition.fromMap(map);
+    final def = PipelineDefinition.fromMap(map);
+    // Auto-migrate pipelines that have distribution steps before archive_ios,
+    // or that don't cross-depend on archive_ios for cross-platform ordering.
+    if (pipelineName == 'mobile' && _pipelineNeedsMigration(def)) {
+      await file.writeAsString(_defaultPipelineYaml());
+      return PipelineDefinition.fromMap(
+          loadYaml(await file.readAsString()) as Map);
+    }
+    return def;
+  }
+
+  bool _pipelineNeedsMigration(PipelineDefinition def) {
+    final distAndroid = def.steps
+        .where((s) => s.id == 'distribute_firebase_android')
+        .firstOrNull;
+    if (distAndroid == null) return false;
+    // Migrate if Android distribution doesn't yet depend on archive_ios
+    return !distAndroid.dependsOn.contains('archive_ios');
   }
 
   /// Copies [sourcePath] into `~/.cicd/projects/{projectId}/files/` and
@@ -319,23 +336,23 @@ steps:
       artifact: ipa
     abort_on_failure: true
 
-  - id: distribute_firebase_android
-    type: firebase_distribute
-    name: "Firebase (Android)"
-    condition: "firebase_android"
-    depends_on: [build_android]
-    params:
-      platform: android
-    retry:
-      max_attempts: 2
-      delay_seconds: 10
-
   - id: archive_ios
     type: ios_archive
     name: "Archive & Sign iOS"
     condition: "ios"
     depends_on: [build_ios]
     abort_on_failure: true
+
+  - id: distribute_firebase_android
+    type: firebase_distribute
+    name: "Firebase (Android)"
+    condition: "firebase_android"
+    depends_on: [build_android, archive_ios]
+    params:
+      platform: android
+    retry:
+      max_attempts: 2
+      delay_seconds: 10
 
   - id: distribute_firebase_ios
     type: firebase_distribute
@@ -357,7 +374,7 @@ steps:
     type: fastlane_lane
     name: "Play Store Upload"
     condition: "playstore"
-    depends_on: [build_android]
+    depends_on: [build_android, archive_ios]
     params:
       lane: upload_playstore
 ''';
