@@ -336,8 +336,8 @@ class _BranchAutocompleteState extends State<_BranchAutocomplete> {
   @override
   void didUpdateWidget(_BranchAutocomplete old) {
     super.didUpdateWidget(old);
-    // Reset text when project changes
-    if (old.state.selectedProject?.id != widget.state.selectedProject?.id) {
+    if (widget.state.branch != old.state.branch &&
+        widget.state.branch != _ctrl.text) {
       _ctrl.text = widget.state.branch;
     }
   }
@@ -548,6 +548,19 @@ class _VersionSectionState extends State<_VersionSection> {
         TextEditingController(text: widget.state.versionName);
     _buildCtrl =
         TextEditingController(text: widget.state.buildNumber);
+  }
+
+  @override
+  void didUpdateWidget(_VersionSection old) {
+    super.didUpdateWidget(old);
+    if (widget.state.versionName != old.state.versionName &&
+        widget.state.versionName != _versionCtrl.text) {
+      _versionCtrl.text = widget.state.versionName;
+    }
+    if (widget.state.buildNumber != old.state.buildNumber &&
+        widget.state.buildNumber != _buildCtrl.text) {
+      _buildCtrl.text = widget.state.buildNumber;
+    }
   }
 
   @override
