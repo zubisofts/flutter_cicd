@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'models/env_config.dart';
 import 'models/resolved_environment.dart';
@@ -31,7 +32,7 @@ class EnvironmentResolver {
       projectId: projectId,
       envName: envName,
     );
-    final appleCreds = await _credentials.loadAppleCredentials(
+    final appleApiKey = await _credentials.loadAppleApiKey(
       projectId: projectId,
       envName: envName,
     );
@@ -50,7 +51,7 @@ class EnvironmentResolver {
     final shellEnv = _buildShellEnv(
       envConfig: envConfig,
       androidCreds: androidCreds,
-      appleCreds: appleCreds,
+      appleApiKey: appleApiKey,
       firebaseToken: firebaseToken,
     );
 
@@ -79,7 +80,7 @@ class EnvironmentResolver {
   Map<String, String> _buildShellEnv({
     required EnvConfig envConfig,
     required AndroidSigningCredentials androidCreds,
-    required AppleCredentials appleCreds,
+    required AppleApiKey appleApiKey,
     required String firebaseToken,
   }) {
     final sysEnv = Platform.environment;
@@ -97,13 +98,16 @@ class EnvironmentResolver {
           ? firebaseToken
           : sysEnv['FIREBASE_TOKEN'] ?? '',
 
-      // Apple / TestFlight
-      'FASTLANE_USER': appleCreds.appleId.isNotEmpty
-          ? appleCreds.appleId
-          : sysEnv['FASTLANE_USER'] ?? '',
-      'FASTLANE_PASSWORD': appleCreds.appSpecificPassword.isNotEmpty
-          ? appleCreds.appSpecificPassword
-          : sysEnv['FASTLANE_PASSWORD'] ?? '',
+      // App Store Connect API Key (replaces FASTLANE_USER/PASSWORD)
+      'ASC_KEY_ID': appleApiKey.keyId.isNotEmpty
+          ? appleApiKey.keyId
+          : sysEnv['ASC_KEY_ID'] ?? '',
+      'ASC_ISSUER_ID': appleApiKey.issuerId.isNotEmpty
+          ? appleApiKey.issuerId
+          : sysEnv['ASC_ISSUER_ID'] ?? '',
+      'ASC_KEY_CONTENT': appleApiKey.privateKeyContent.isNotEmpty
+          ? base64Encode(utf8.encode(appleApiKey.privateKeyContent))
+          : sysEnv['ASC_KEY_CONTENT'] ?? '',
 
       // Play Store JSON key path (still env-var only — path, not secret)
       'PLAY_STORE_JSON_KEY': sysEnv['PLAY_STORE_JSON_KEY'] ?? '',
