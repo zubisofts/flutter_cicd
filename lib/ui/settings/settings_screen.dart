@@ -354,17 +354,15 @@ class _AppleCard extends StatefulWidget {
 }
 
 class _AppleCardState extends State<_AppleCard> {
-  late TextEditingController _appleIdCtrl;
-  late TextEditingController _passCtrl;
-  bool _showPass = false;
+  late TextEditingController _keyIdCtrl;
+  late TextEditingController _issuerIdCtrl;
+  late TextEditingController _privateKeyCtrl;
+  bool _showKey = false;
 
   @override
   void initState() {
     super.initState();
-    _appleIdCtrl =
-        TextEditingController(text: widget.state.appleCreds.appleId);
-    _passCtrl = TextEditingController(
-        text: widget.state.appleCreds.appSpecificPassword);
+    _initControllers(widget.state);
   }
 
   @override
@@ -372,21 +370,36 @@ class _AppleCardState extends State<_AppleCard> {
     super.didUpdateWidget(old);
     if (old.state.selectedEnv != widget.state.selectedEnv ||
         old.state.projectId != widget.state.projectId) {
-      _appleIdCtrl.text = widget.state.appleCreds.appleId;
-      _passCtrl.text = widget.state.appleCreds.appSpecificPassword;
+      _initControllers(widget.state);
     }
+  }
+
+  void _initControllers(SettingsState s) {
+    _keyIdCtrl = TextEditingController(text: s.appleApiKey.keyId);
+    _issuerIdCtrl = TextEditingController(text: s.appleApiKey.issuerId);
+    _privateKeyCtrl = TextEditingController(text: s.appleApiKey.privateKeyContent);
   }
 
   @override
   void dispose() {
-    _appleIdCtrl.dispose();
-    _passCtrl.dispose();
+    _keyIdCtrl.dispose();
+    _issuerIdCtrl.dispose();
+    _privateKeyCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickP8File() async {
+    const typeGroup = XTypeGroup(label: 'API Key', extensions: ['p8']);
+    final file = await openFile(acceptedTypeGroups: [typeGroup]);
+    if (file != null && mounted) {
+      final content = await file.readAsString();
+      setState(() => _privateKeyCtrl.text = content);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isConfigured = widget.state.appleCreds.isConfigured;
+    final isConfigured = widget.state.appleApiKey.isConfigured;
     return SectionCard(
       title: 'APPLE / TESTFLIGHT',
       trailing: isConfigured
@@ -399,47 +412,86 @@ class _AppleCardState extends State<_AppleCard> {
             ])
           : null,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, size: 13, color: Color(0xFF8B949E)),
+              Gap(6),
+              Expanded(
+                child: Text(
+                  'Uses App Store Connect API Key — no 2FA required. '
+                  'Create one in App Store Connect → Users & Access → Integrations → App Store Connect API.',
+                  style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+          const Gap(12),
           TextField(
-            controller: _appleIdCtrl,
-            style: const TextStyle(
-                color: Color(0xFFE6EDF3), fontSize: 13),
+            controller: _keyIdCtrl,
+            style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 13),
             decoration: const InputDecoration(
-              labelText: 'Apple ID (email)',
-              hintText: 'you@example.com',
-              prefixIcon: Icon(Icons.apple,
-                  size: 16, color: Color(0xFF8B949E)),
+              labelText: 'Key ID',
+              hintText: 'ABCDE12345',
+              prefixIcon: Icon(Icons.vpn_key, size: 16, color: Color(0xFF8B949E)),
             ),
           ),
           const Gap(10),
           TextField(
-            controller: _passCtrl,
-            obscureText: !_showPass,
-            style: const TextStyle(
-                color: Color(0xFFE6EDF3), fontSize: 13),
-            decoration: InputDecoration(
-              labelText: 'App-specific password',
-              hintText: 'xxxx-xxxx-xxxx-xxxx',
-              suffixIcon: IconButton(
-                icon: Icon(
-                    _showPass
-                        ? Icons.visibility_off
-                        : Icons.visibility,
-                    size: 16,
-                    color: const Color(0xFF8B949E)),
-                onPressed: () =>
-                    setState(() => _showPass = !_showPass),
-              ),
+            controller: _issuerIdCtrl,
+            style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 13),
+            decoration: const InputDecoration(
+              labelText: 'Issuer ID',
+              hintText: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+              prefixIcon: Icon(Icons.badge, size: 16, color: Color(0xFF8B949E)),
             ),
           ),
-          const Gap(12),
+          const Gap(10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _privateKeyCtrl,
+                  obscureText: !_showKey,
+                  maxLines: _showKey ? 4 : 1,
+                  style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 12),
+                  decoration: InputDecoration(
+                    labelText: 'Private key (.p8 content)',
+                    hintText: '-----BEGIN PRIVATE KEY-----',
+                    prefixIcon: const Icon(Icons.lock_outline,
+                        size: 16, color: Color(0xFF8B949E)),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                          _showKey ? Icons.visibility_off : Icons.visibility,
+                          size: 16,
+                          color: const Color(0xFF8B949E)),
+                      onPressed: () => setState(() => _showKey = !_showKey),
+                    ),
+                  ),
+                ),
+              ),
+              const Gap(8),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: OutlinedButton(
+                  onPressed: _pickP8File,
+                  child: const Text('Browse'),
+                ),
+              ),
+            ],
+          ),
+          const Gap(14),
           Align(
             alignment: Alignment.centerRight,
             child: ElevatedButton.icon(
               onPressed: () {
-                context.read<SettingsBloc>().add(AppleCredentialsSaved(
-                      appleId: _appleIdCtrl.text.trim(),
-                      appSpecificPassword: _passCtrl.text,
+                context.read<SettingsBloc>().add(AppleApiKeySaved(
+                      keyId: _keyIdCtrl.text.trim(),
+                      issuerId: _issuerIdCtrl.text.trim(),
+                      privateKeyContent: _privateKeyCtrl.text.trim(),
                     ));
               },
               icon: const Icon(Icons.save, size: 14),

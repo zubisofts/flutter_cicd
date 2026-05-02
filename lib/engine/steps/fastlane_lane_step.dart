@@ -96,7 +96,15 @@ default_platform(:ios)
 platform :ios do
   desc "Upload IPA to TestFlight"
   lane :upload_testflight do
+    api_key = app_store_connect_api_key(
+      key_id:         ENV["ASC_KEY_ID"],
+      issuer_id:      ENV["ASC_ISSUER_ID"],
+      key_content:    ENV["ASC_KEY_CONTENT"],
+      is_key_content_base64: true,
+      in_house:       false,
+    )
     pilot(
+      api_key:                         api_key,
       ipa:                             ENV["IPA_PATH"],
       team_id:                         ENV["APPLE_TEAM_ID"],
       skip_waiting_for_build_processing: true,
@@ -123,13 +131,11 @@ end
 ''';
 
   String _defaultAppfile(Map<String, String> env) {
-    final appleId = env['FASTLANE_USER'] ?? '';
     final bundleId = env['BUNDLE_ID'] ?? '';
     final teamId = env['APPLE_TEAM_ID'] ?? '';
     final packageName = env['ANDROID_PACKAGE_NAME'] ?? '';
     return '''
 app_identifier("$bundleId")
-apple_id("$appleId")
 team_id("$teamId")
 json_key_file(ENV["PLAY_STORE_JSON_KEY"])
 package_name("$packageName")

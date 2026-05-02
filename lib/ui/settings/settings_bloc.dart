@@ -47,15 +47,17 @@ class AndroidSigningSaved extends SettingsEvent {
       [keystorePath, keyAlias];
 }
 
-class AppleCredentialsSaved extends SettingsEvent {
-  final String appleId;
-  final String appSpecificPassword;
-  const AppleCredentialsSaved({
-    required this.appleId,
-    required this.appSpecificPassword,
+class AppleApiKeySaved extends SettingsEvent {
+  final String keyId;
+  final String issuerId;
+  final String privateKeyContent;
+  const AppleApiKeySaved({
+    required this.keyId,
+    required this.issuerId,
+    required this.privateKeyContent,
   });
   @override
-  List<Object?> get props => [appleId];
+  List<Object?> get props => [keyId, issuerId];
 }
 
 class FirebaseTokenSaved extends SettingsEvent {
@@ -140,7 +142,7 @@ class SettingsState extends Equatable {
   final String selectedEnv;
   final List<String> availableEnvs;
   final AndroidSigningCredentials androidCreds;
-  final AppleCredentials appleCreds;
+  final AppleApiKey appleApiKey;
   final String firebaseToken;
 
   // Editable env config fields
@@ -176,10 +178,7 @@ class SettingsState extends Equatable {
       keystorePassword: '',
       keyPassword: '',
     ),
-    this.appleCreds = const AppleCredentials(
-      appleId: '',
-      appSpecificPassword: '',
-    ),
+    this.appleApiKey = const AppleApiKey(),
     this.firebaseToken = '',
     this.androidPackageName = '',
     this.androidFirebaseAppId = '',
@@ -208,7 +207,7 @@ class SettingsState extends Equatable {
     String? selectedEnv,
     List<String>? availableEnvs,
     AndroidSigningCredentials? androidCreds,
-    AppleCredentials? appleCreds,
+    AppleApiKey? appleApiKey,
     String? firebaseToken,
     String? androidPackageName,
     String? androidFirebaseAppId,
@@ -238,7 +237,7 @@ class SettingsState extends Equatable {
         selectedEnv: selectedEnv ?? this.selectedEnv,
         availableEnvs: availableEnvs ?? this.availableEnvs,
         androidCreds: androidCreds ?? this.androidCreds,
-        appleCreds: appleCreds ?? this.appleCreds,
+        appleApiKey: appleApiKey ?? this.appleApiKey,
         firebaseToken: firebaseToken ?? this.firebaseToken,
         androidPackageName: androidPackageName ?? this.androidPackageName,
         androidFirebaseAppId: androidFirebaseAppId ?? this.androidFirebaseAppId,
@@ -270,7 +269,8 @@ class SettingsState extends Equatable {
         selectedEnv,
         androidCreds.keystorePath,
         androidCreds.keyAlias,
-        appleCreds.appleId,
+        appleApiKey.keyId,
+        appleApiKey.issuerId,
         firebaseToken,
         androidPackageName,
         androidFirebaseAppId,
@@ -321,7 +321,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<SettingsOpened>(_onOpened);
     on<SettingsEnvChanged>(_onEnvChanged);
     on<AndroidSigningSaved>(_onAndroidSigningSaved);
-    on<AppleCredentialsSaved>(_onAppleSaved);
+    on<AppleApiKeySaved>(_onAppleApiKeySaved);
     on<FirebaseTokenSaved>(_onFirebaseTokenSaved);
     on<EnvConfigFieldUpdated>(_onFieldUpdated);
     on<EnvConfigSaved>(_onEnvConfigSaved);
@@ -357,7 +357,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       final envs = await _configRepo.listEnvironments(projectId);
       final androidCreds = await _creds.loadAndroidSigning(
           projectId: projectId, envName: envName);
-      final appleCreds = await _creds.loadAppleCredentials(
+      final appleApiKey = await _creds.loadAppleApiKey(
           projectId: projectId, envName: envName);
       final firebaseToken = await _creds.loadFirebaseToken();
       final smtpConfig = await _creds.loadSmtpConfig();
@@ -369,7 +369,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       emit(state.copyWith(
         availableEnvs: envs.isNotEmpty ? envs : ['dev', 'staging', 'prod'],
         androidCreds: androidCreds,
-        appleCreds: appleCreds,
+        appleApiKey: appleApiKey,
         firebaseToken: firebaseToken,
         androidPackageName: envConfig.android.packageName,
         androidFirebaseAppId: envConfig.android.firebaseAppId,
@@ -421,21 +421,23 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     }
   }
 
-  Future<void> _onAppleSaved(
-      AppleCredentialsSaved event, Emitter<SettingsState> emit) async {
+  Future<void> _onAppleApiKeySaved(
+      AppleApiKeySaved event, Emitter<SettingsState> emit) async {
     try {
-      await _creds.saveAppleCredentials(
+      await _creds.saveAppleApiKey(
         projectId: state.projectId,
         envName: state.selectedEnv,
-        appleId: event.appleId,
-        appSpecificPassword: event.appSpecificPassword,
+        keyId: event.keyId,
+        issuerId: event.issuerId,
+        privateKeyContent: event.privateKeyContent,
       );
       emit(state.copyWith(
-        appleCreds: AppleCredentials(
-          appleId: event.appleId,
-          appSpecificPassword: event.appSpecificPassword,
+        appleApiKey: AppleApiKey(
+          keyId: event.keyId,
+          issuerId: event.issuerId,
+          privateKeyContent: event.privateKeyContent,
         ),
-        savedMessage: 'Apple credentials saved to Keychain',
+        savedMessage: 'App Store Connect API key saved to Keychain',
       ));
       await Future.delayed(const Duration(seconds: 3));
       emit(state.copyWith(clearSaved: true));

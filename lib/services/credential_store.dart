@@ -73,34 +73,41 @@ class CredentialStore {
     return await _storage.read(key: 'cicd.firebase.token') ?? '';
   }
 
-  // ── App Store / TestFlight ────────────────────────────────────────────────
+  // ── App Store Connect API Key (replaces username/password for TestFlight) ──
+  // API keys are account-scoped in App Store Connect (Users & Access → Keys).
+  // They work without 2FA prompts and don't expire like session tokens.
 
-  Future<void> saveAppleCredentials({
+  Future<void> saveAppleApiKey({
     required String projectId,
     required String envName,
-    required String appleId,
-    required String appSpecificPassword,
+    required String keyId,
+    required String issuerId,
+    required String privateKeyContent,
   }) async {
     await Future.wait([
       _storage.write(
-          key: _k(projectId, envName, 'apple.id'), value: appleId),
+          key: _k(projectId, envName, 'apple.asc_key_id'), value: keyId),
       _storage.write(
-          key: _k(projectId, envName, 'apple.app_specific_password'),
-          value: appSpecificPassword),
+          key: _k(projectId, envName, 'apple.asc_issuer_id'), value: issuerId),
+      _storage.write(
+          key: _k(projectId, envName, 'apple.asc_private_key'),
+          value: privateKeyContent),
     ]);
   }
 
-  Future<AppleCredentials> loadAppleCredentials({
+  Future<AppleApiKey> loadAppleApiKey({
     required String projectId,
     required String envName,
   }) async {
     final values = await Future.wait([
-      _storage.read(key: _k(projectId, envName, 'apple.id')),
-      _storage.read(key: _k(projectId, envName, 'apple.app_specific_password')),
+      _storage.read(key: _k(projectId, envName, 'apple.asc_key_id')),
+      _storage.read(key: _k(projectId, envName, 'apple.asc_issuer_id')),
+      _storage.read(key: _k(projectId, envName, 'apple.asc_private_key')),
     ]);
-    return AppleCredentials(
-      appleId: values[0] ?? '',
-      appSpecificPassword: values[1] ?? '',
+    return AppleApiKey(
+      keyId: values[0] ?? '',
+      issuerId: values[1] ?? '',
+      privateKeyContent: values[2] ?? '',
     );
   }
 
@@ -242,16 +249,19 @@ class AndroidSigningCredentials {
       keystorePath.isNotEmpty && keyAlias.isNotEmpty;
 }
 
-class AppleCredentials {
-  final String appleId;
-  final String appSpecificPassword;
+class AppleApiKey {
+  final String keyId;
+  final String issuerId;
+  final String privateKeyContent;
 
-  const AppleCredentials({
-    required this.appleId,
-    required this.appSpecificPassword,
+  const AppleApiKey({
+    this.keyId = '',
+    this.issuerId = '',
+    this.privateKeyContent = '',
   });
 
-  bool get isConfigured => appleId.isNotEmpty;
+  bool get isConfigured =>
+      keyId.isNotEmpty && issuerId.isNotEmpty && privateKeyContent.isNotEmpty;
 }
 
 class SlackConfig {
