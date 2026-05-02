@@ -68,6 +68,7 @@ class IosArchiveStep extends PipelineStep {
       timeout: const Duration(minutes: 45),
       logSink: ctx.logSink,
       stepId: id,
+      cancelSignal: ctx.abortSignal,
     );
 
     if (!buildResult.success) {

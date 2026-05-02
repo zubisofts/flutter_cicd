@@ -28,6 +28,7 @@ class FlutterPubGetStep extends PipelineStep {
         workingDir: ctx.workspaceDir,
         logSink: ctx.logSink,
         stepId: id,
+        cancelSignal: ctx.abortSignal,
       );
       if (!result.success) {
         throw RetryableStepException(
