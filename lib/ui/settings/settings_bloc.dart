@@ -60,11 +60,18 @@ class AppleApiKeySaved extends SettingsEvent {
   List<Object?> get props => [keyId, issuerId];
 }
 
-class FirebaseTokenSaved extends SettingsEvent {
-  final String token;
-  const FirebaseTokenSaved(this.token);
+class FirebaseServiceAccountSaved extends SettingsEvent {
+  final String path;
+  const FirebaseServiceAccountSaved(this.path);
   @override
-  List<Object?> get props => [token];
+  List<Object?> get props => [path];
+}
+
+class PlayStoreKeyPathSaved extends SettingsEvent {
+  final String path;
+  const PlayStoreKeyPathSaved(this.path);
+  @override
+  List<Object?> get props => [path];
 }
 
 class EnvConfigFieldUpdated extends SettingsEvent {
@@ -143,7 +150,8 @@ class SettingsState extends Equatable {
   final List<String> availableEnvs;
   final AndroidSigningCredentials androidCreds;
   final AppleApiKey appleApiKey;
-  final String firebaseToken;
+  final String firebaseServiceAccountPath;
+  final String playStoreKeyPath;
 
   // Editable env config fields
   final String androidPackageName;
@@ -179,7 +187,8 @@ class SettingsState extends Equatable {
       keyPassword: '',
     ),
     this.appleApiKey = const AppleApiKey(),
-    this.firebaseToken = '',
+    this.firebaseServiceAccountPath = '',
+    this.playStoreKeyPath = '',
     this.androidPackageName = '',
     this.androidFirebaseAppId = '',
     this.iosBundleId = '',
@@ -208,7 +217,8 @@ class SettingsState extends Equatable {
     List<String>? availableEnvs,
     AndroidSigningCredentials? androidCreds,
     AppleApiKey? appleApiKey,
-    String? firebaseToken,
+    String? firebaseServiceAccountPath,
+    String? playStoreKeyPath,
     String? androidPackageName,
     String? androidFirebaseAppId,
     String? iosBundleId,
@@ -238,7 +248,9 @@ class SettingsState extends Equatable {
         availableEnvs: availableEnvs ?? this.availableEnvs,
         androidCreds: androidCreds ?? this.androidCreds,
         appleApiKey: appleApiKey ?? this.appleApiKey,
-        firebaseToken: firebaseToken ?? this.firebaseToken,
+        firebaseServiceAccountPath:
+            firebaseServiceAccountPath ?? this.firebaseServiceAccountPath,
+        playStoreKeyPath: playStoreKeyPath ?? this.playStoreKeyPath,
         androidPackageName: androidPackageName ?? this.androidPackageName,
         androidFirebaseAppId: androidFirebaseAppId ?? this.androidFirebaseAppId,
         iosBundleId: iosBundleId ?? this.iosBundleId,
@@ -271,7 +283,8 @@ class SettingsState extends Equatable {
         androidCreds.keyAlias,
         appleApiKey.keyId,
         appleApiKey.issuerId,
-        firebaseToken,
+        firebaseServiceAccountPath,
+        playStoreKeyPath,
         androidPackageName,
         androidFirebaseAppId,
         iosBundleId,
@@ -322,7 +335,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<SettingsEnvChanged>(_onEnvChanged);
     on<AndroidSigningSaved>(_onAndroidSigningSaved);
     on<AppleApiKeySaved>(_onAppleApiKeySaved);
-    on<FirebaseTokenSaved>(_onFirebaseTokenSaved);
+    on<FirebaseServiceAccountSaved>(_onFirebaseServiceAccountSaved);
+    on<PlayStoreKeyPathSaved>(_onPlayStoreKeyPathSaved);
     on<EnvConfigFieldUpdated>(_onFieldUpdated);
     on<EnvConfigSaved>(_onEnvConfigSaved);
     on<EmailConfigSaved>(_onEmailConfigSaved);
@@ -359,7 +373,9 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
           projectId: projectId, envName: envName);
       final appleApiKey = await _creds.loadAppleApiKey(
           projectId: projectId, envName: envName);
-      final firebaseToken = await _creds.loadFirebaseToken();
+      final firebaseServiceAccountPath =
+          await _creds.loadFirebaseServiceAccountPath();
+      final playStoreKeyPath = await _creds.loadPlayStoreKeyPath();
       final smtpConfig = await _creds.loadSmtpConfig();
       final slackConfig = await _creds.loadSlackConfig();
       final teamsConfig = await _creds.loadTeamsConfig();
@@ -370,7 +386,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
         availableEnvs: envs.isNotEmpty ? envs : ['dev', 'staging', 'prod'],
         androidCreds: androidCreds,
         appleApiKey: appleApiKey,
-        firebaseToken: firebaseToken,
+        firebaseServiceAccountPath: firebaseServiceAccountPath,
+        playStoreKeyPath: playStoreKeyPath,
         androidPackageName: envConfig.android.packageName,
         androidFirebaseAppId: envConfig.android.firebaseAppId,
         iosBundleId: envConfig.ios.bundleId,
@@ -446,13 +463,28 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     }
   }
 
-  Future<void> _onFirebaseTokenSaved(
-      FirebaseTokenSaved event, Emitter<SettingsState> emit) async {
+  Future<void> _onFirebaseServiceAccountSaved(
+      FirebaseServiceAccountSaved event, Emitter<SettingsState> emit) async {
     try {
-      await _creds.saveFirebaseToken(event.token);
+      await _creds.saveFirebaseServiceAccountPath(event.path);
       emit(state.copyWith(
-        firebaseToken: event.token,
-        savedMessage: 'Firebase token saved to Keychain',
+        firebaseServiceAccountPath: event.path,
+        savedMessage: 'Firebase service account path saved to Keychain',
+      ));
+      await Future.delayed(const Duration(seconds: 3));
+      emit(state.copyWith(clearSaved: true));
+    } catch (e) {
+      emit(state.copyWith(error: e.toString()));
+    }
+  }
+
+  Future<void> _onPlayStoreKeyPathSaved(
+      PlayStoreKeyPathSaved event, Emitter<SettingsState> emit) async {
+    try {
+      await _creds.savePlayStoreKeyPath(event.path);
+      emit(state.copyWith(
+        playStoreKeyPath: event.path,
+        savedMessage: 'Play Store key path saved to Keychain',
       ));
       await Future.delayed(const Duration(seconds: 3));
       emit(state.copyWith(clearSaved: true));
