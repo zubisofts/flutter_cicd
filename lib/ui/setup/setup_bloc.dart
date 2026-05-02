@@ -260,6 +260,7 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
       ));
       if (projects.isNotEmpty) {
         await _loadEnvs(projects.first.id, emit);
+        await _applyLastRunConfig(projects.first.id, emit);
         _fetchBranches(projects.first.repository);
       }
     } catch (e) {
@@ -277,6 +278,7 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
       clearError: true,
     ));
     await _loadEnvs(event.project.id, emit);
+    await _applyLastRunConfig(event.project.id, emit);
     _fetchBranches(event.project.repository);
   }
 
@@ -362,9 +364,47 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
     emit(state.copyWith(targets: list));
   }
 
-  void _onRunRequested(
-      RunPipelineRequested event, Emitter<SetupState> emit) {
+  Future<void> _onRunRequested(
+      RunPipelineRequested event, Emitter<SetupState> emit) async {
+    final project = state.selectedProject;
+    if (project != null) {
+      _configRepo.saveLastRunConfig(project.id, {
+        'branch': state.branch,
+        'versionName': state.versionName,
+        'buildNumber': state.buildNumber,
+        'selectedEnv': state.selectedEnv,
+        'platforms': state.platforms,
+        'targets': state.targets,
+      }).ignore();
+    }
     emit(state.copyWith(readyToRun: true));
+  }
+
+  Future<void> _applyLastRunConfig(
+      String projectId, Emitter<SetupState> emit) async {
+    try {
+      final config = await _configRepo.loadLastRunConfig(projectId);
+      if (config == null) return;
+
+      final savedEnv = config['selectedEnv'] as String?;
+      final envToApply = savedEnv != null &&
+              state.availableEnvs.contains(savedEnv)
+          ? savedEnv
+          : null;
+
+      emit(state.copyWith(
+        branch: config['branch'] as String? ?? state.branch,
+        versionName: config['versionName'] as String? ?? state.versionName,
+        buildNumber: config['buildNumber'] as String? ?? state.buildNumber,
+        selectedEnv: envToApply ?? state.selectedEnv,
+        platforms:
+            (config['platforms'] as List?)?.cast<String>() ?? state.platforms,
+        targets:
+            (config['targets'] as List?)?.cast<String>() ?? state.targets,
+        requiresProductionConfirm:
+            (envToApply ?? state.selectedEnv) == 'prod',
+      ));
+    } catch (_) {}
   }
 
   Future<void> _onNewProject(

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:yaml/yaml.dart';
 import 'package:path/path.dart' as p;
@@ -98,6 +99,22 @@ class ConfigRepository {
     final dest = File(p.join(filesDir.path, filename));
     await File(sourcePath).copy(dest.path);
     return dest.path;
+  }
+
+  Future<void> saveLastRunConfig(
+      String projectId, Map<String, dynamic> config) async {
+    final file = File(p.join(_projectDir(projectId), 'last_run.json'));
+    await file.writeAsString(jsonEncode(config));
+  }
+
+  Future<Map<String, dynamic>?> loadLastRunConfig(String projectId) async {
+    final file = File(p.join(_projectDir(projectId), 'last_run.json'));
+    if (!await file.exists()) return null;
+    try {
+      return jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Deletes the entire project directory (config, envs, pipelines, files).
