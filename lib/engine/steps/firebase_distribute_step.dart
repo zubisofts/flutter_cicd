@@ -30,7 +30,9 @@ class FirebaseDistributeStep extends PipelineStep {
       );
     }
 
-    final artifactPath = ctx.artifactPath(platform);
+    final artifactPath = platform == 'android'
+        ? (ctx.artifactPath('android_apk') ?? ctx.artifactPath('android'))
+        : ctx.artifactPath(platform);
     if (artifactPath == null || artifactPath.isEmpty) {
       throw FatalPipelineException(
         stepId: id,

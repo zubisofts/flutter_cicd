@@ -318,13 +318,22 @@ steps:
       max_attempts: 2
       delay_seconds: 5
 
-  - id: build_android
+  - id: build_android_apk
     type: flutter_build
-    name: "Build Android"
-    condition: "android"
+    name: "Build Android APK"
+    condition: "firebase_android"
     params:
       platform: android
       artifact: apk
+    abort_on_failure: true
+
+  - id: build_android_aab
+    type: flutter_build
+    name: "Build Android AAB"
+    condition: "playstore"
+    params:
+      platform: android
+      artifact: appbundle
     abort_on_failure: true
 
   - id: build_ios
@@ -347,7 +356,7 @@ steps:
     type: firebase_distribute
     name: "Firebase (Android)"
     condition: "firebase_android"
-    depends_on: [build_android, archive_ios]
+    depends_on: [build_android_apk, archive_ios]
     params:
       platform: android
     retry:
@@ -374,7 +383,7 @@ steps:
     type: fastlane_lane
     name: "Play Store Upload"
     condition: "playstore"
-    depends_on: [build_android, archive_ios]
+    depends_on: [build_android_aab, archive_ios]
     params:
       lane: upload_playstore
 ''';

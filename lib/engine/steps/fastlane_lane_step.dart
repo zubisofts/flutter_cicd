@@ -37,6 +37,17 @@ class FastlaneLaneStep extends PipelineStep {
       'FL_VERSION_NUMBER': env.resolvedVersion,
     };
 
+    // Play Store requires an App Bundle — APKs are rejected by Google for new
+    // apps and exceed the 150 MB APK size limit enforced by Play Store.
+    final laneBaseName = lane.trim().split(RegExp(r'\s+')).last;
+    if (laneBaseName == 'upload_playstore' && shellEnv['AAB_PATH']!.isEmpty) {
+      throw FatalPipelineException(
+        stepId: id,
+        message: 'Play Store upload requires an App Bundle (.aab). '
+            'Set `artifact: appbundle` on your flutter_build step.',
+      );
+    }
+
     await _ensureFastlaneScaffolded(ctx, shellEnv);
 
     // Support "platform lane" syntax (e.g. "android upload_playstore") so
@@ -116,26 +127,18 @@ lane :upload_testflight do
   )
 end
 
-desc "Upload AAB/APK to Play Store"
+desc "Upload AAB to Play Store"
 lane :upload_playstore do
-  aab_path = ENV.fetch("AAB_PATH", "")
-  apk_path = ENV.fetch("APK_PATH", "")
-  opts = {
+  upload_to_play_store(
     track:                   ENV["PLAY_TRACK"],
+    aab:                     ENV["AAB_PATH"],
     json_key:                ENV["PLAY_STORE_JSON_KEY"],
     rollout:                 (ENV["ROLLOUT_PERCENTAGE"].to_f / 100).to_s,
+    skip_upload_apk:         true,
     skip_upload_metadata:    true,
     skip_upload_images:      true,
     skip_upload_screenshots: true,
-  }
-  unless aab_path.empty?
-    opts[:aab]             = aab_path
-    opts[:skip_upload_apk] = true
-  else
-    opts[:apk]             = apk_path
-    opts[:skip_upload_apk] = false
-  end
-  upload_to_play_store(opts)
+  )
 end
 ''';
 
