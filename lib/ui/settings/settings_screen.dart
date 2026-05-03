@@ -49,7 +49,6 @@ class _SettingsContent extends StatelessWidget {
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, state) {
         return Scaffold(
-          backgroundColor: const Color(0xFF0D1117),
           body: state.isLoading
               ? const Center(child: CircularProgressIndicator())
               : Column(
@@ -125,7 +124,6 @@ class _Header extends StatelessWidget {
           const Text(
             'Project Settings',
             style: TextStyle(
-              color: Color(0xFFE6EDF3),
               fontSize: 22,
               fontWeight: FontWeight.w700,
             ),
@@ -241,7 +239,7 @@ class _AndroidSigningCardState extends State<_AndroidSigningCard> {
                   controller: _pathCtrl,
                   readOnly: true,
                   style: const TextStyle(
-                      color: Color(0xFFE6EDF3), fontSize: 13),
+                      fontSize: 13),
                   decoration: const InputDecoration(
                     labelText: 'Keystore file',
                     hintText: 'Select a .keystore or .jks file',
@@ -262,7 +260,7 @@ class _AndroidSigningCardState extends State<_AndroidSigningCard> {
           TextField(
             controller: _aliasCtrl,
             style: const TextStyle(
-                color: Color(0xFFE6EDF3), fontSize: 13),
+                fontSize: 13),
             decoration: const InputDecoration(labelText: 'Key alias'),
           ),
           const Gap(10),
@@ -271,7 +269,7 @@ class _AndroidSigningCardState extends State<_AndroidSigningCard> {
             controller: _ksPassCtrl,
             obscureText: !_showKsPass,
             style: const TextStyle(
-                color: Color(0xFFE6EDF3), fontSize: 13),
+                fontSize: 13),
             decoration: InputDecoration(
               labelText: 'Keystore password',
               suffixIcon: IconButton(
@@ -292,7 +290,7 @@ class _AndroidSigningCardState extends State<_AndroidSigningCard> {
             controller: _keyPassCtrl,
             obscureText: !_showKeyPass,
             style: const TextStyle(
-                color: Color(0xFFE6EDF3), fontSize: 13),
+                fontSize: 13),
             decoration: InputDecoration(
               labelText: 'Key password',
               suffixIcon: IconButton(
@@ -432,7 +430,7 @@ class _AppleCardState extends State<_AppleCard> {
           const Gap(12),
           TextField(
             controller: _keyIdCtrl,
-            style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 13),
+            style: const TextStyle(fontSize: 13),
             decoration: const InputDecoration(
               labelText: 'Key ID',
               hintText: 'ABCDE12345',
@@ -442,7 +440,7 @@ class _AppleCardState extends State<_AppleCard> {
           const Gap(10),
           TextField(
             controller: _issuerIdCtrl,
-            style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 13),
+            style: const TextStyle(fontSize: 13),
             decoration: const InputDecoration(
               labelText: 'Issuer ID',
               hintText: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
@@ -458,7 +456,7 @@ class _AppleCardState extends State<_AppleCard> {
                   controller: _privateKeyCtrl,
                   obscureText: !_showKey,
                   maxLines: _showKey ? 4 : 1,
-                  style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 12),
+                  style: const TextStyle(fontSize: 12),
                   decoration: InputDecoration(
                     labelText: 'Private key (.p8 content)',
                     hintText: '-----BEGIN PRIVATE KEY-----',
@@ -634,7 +632,7 @@ class _FirebaseCardState extends State<_FirebaseCard> {
                   controller: _serviceAccountCtrl,
                   readOnly: true,
                   style: const TextStyle(
-                      color: Color(0xFFE6EDF3), fontSize: 13),
+                      fontSize: 13),
                   decoration: const InputDecoration(
                     labelText: 'Firebase service account',
                     hintText: 'Select a service account .json file',
@@ -692,7 +690,7 @@ class _FirebaseCardState extends State<_FirebaseCard> {
                   controller: _playStoreCtrl,
                   readOnly: true,
                   style: const TextStyle(
-                      color: Color(0xFFE6EDF3), fontSize: 13),
+                      fontSize: 13),
                   decoration: const InputDecoration(
                     labelText: 'Play Store service account',
                     hintText: 'Select a service account .json file',
@@ -729,7 +727,7 @@ class _FirebaseCardState extends State<_FirebaseCard> {
           // Tester groups (per-environment)
           TextField(
             controller: _groupsCtrl,
-            style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 13),
+            style: const TextStyle(fontSize: 13),
             decoration: const InputDecoration(
               labelText: 'Firebase tester groups',
               hintText: 'internal-qa, beta-testers',
@@ -857,11 +855,13 @@ class _EnvConfigCardState extends State<_EnvConfigCard> {
               (v) => bloc.add(EnvConfigFieldUpdated('ios_provisioning_profile', v))),
           const Gap(8),
           DropdownButtonFormField<String>(
-            initialValue: widget.state.iosExportMethod.isNotEmpty
+            value: widget.state.iosExportMethod.isNotEmpty
                 ? widget.state.iosExportMethod
                 : 'app-store',
-            dropdownColor: const Color(0xFF161B22),
-            style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 12),
+            dropdownColor: Theme.of(context).colorScheme.surface,
+            style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurface),
             decoration: const InputDecoration(
               labelText: 'Export Method',
               prefixIcon: Icon(Icons.ios_share,
@@ -889,7 +889,7 @@ class _EnvConfigCardState extends State<_EnvConfigCard> {
                   controller: _dartDefineCtrl,
                   readOnly: true,
                   style: const TextStyle(
-                      color: Color(0xFFE6EDF3), fontSize: 12),
+                      fontSize: 12),
                   decoration: const InputDecoration(
                     labelText: 'dart-define-from-file path',
                     hintText: 'Select a .json config file',
@@ -938,7 +938,7 @@ class _EnvConfigCardState extends State<_EnvConfigCard> {
       String hint, ValueChanged<String> onChanged) {
     return TextField(
       controller: ctrl,
-      style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 12),
+      style: const TextStyle(fontSize: 12),
       decoration: InputDecoration(labelText: label, hintText: hint),
       onChanged: onChanged,
     );
@@ -1042,7 +1042,7 @@ class _EmailNotificationCardState extends State<_EmailNotificationCard> {
             children: [
               const Text(
                 'Send email on build completion',
-                style: TextStyle(color: Color(0xFFE6EDF3), fontSize: 13),
+                style: TextStyle(fontSize: 13),
               ),
               Switch(
                 value: _enabled,
@@ -1060,7 +1060,7 @@ class _EmailNotificationCardState extends State<_EmailNotificationCard> {
                 child: TextField(
                   controller: _hostCtrl,
                   style: const TextStyle(
-                      color: Color(0xFFE6EDF3), fontSize: 13),
+                      fontSize: 13),
                   decoration: const InputDecoration(
                     labelText: 'SMTP host',
                     hintText: 'smtp.gmail.com',
@@ -1074,7 +1074,7 @@ class _EmailNotificationCardState extends State<_EmailNotificationCard> {
                 child: TextField(
                   controller: _portCtrl,
                   style: const TextStyle(
-                      color: Color(0xFFE6EDF3), fontSize: 13),
+                      fontSize: 13),
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(labelText: 'Port'),
                 ),
@@ -1112,7 +1112,7 @@ class _EmailNotificationCardState extends State<_EmailNotificationCard> {
           TextField(
             controller: _userCtrl,
             style: const TextStyle(
-                color: Color(0xFFE6EDF3), fontSize: 13),
+                fontSize: 13),
             decoration: const InputDecoration(
               labelText: 'Username (email)',
               hintText: 'you@gmail.com',
@@ -1126,7 +1126,7 @@ class _EmailNotificationCardState extends State<_EmailNotificationCard> {
             controller: _passCtrl,
             obscureText: !_showPass,
             style: const TextStyle(
-                color: Color(0xFFE6EDF3), fontSize: 13),
+                fontSize: 13),
             decoration: InputDecoration(
               labelText: 'Password / App password',
               hintText: 'Gmail: use an App Password',
@@ -1149,7 +1149,7 @@ class _EmailNotificationCardState extends State<_EmailNotificationCard> {
           TextField(
             controller: _recipientCtrl,
             style: const TextStyle(
-                color: Color(0xFFE6EDF3), fontSize: 13),
+                fontSize: 13),
             decoration: const InputDecoration(
               labelText: 'Send to (recipient)',
               hintText: 'team@example.com',
@@ -1283,7 +1283,7 @@ class _SlackNotificationCardState extends State<_SlackNotificationCard> {
             children: [
               const Text(
                 'Post to Slack on build completion',
-                style: TextStyle(color: Color(0xFFE6EDF3), fontSize: 13),
+                style: TextStyle(fontSize: 13),
               ),
               Switch(
                 value: _enabled,
@@ -1296,7 +1296,7 @@ class _SlackNotificationCardState extends State<_SlackNotificationCard> {
           TextField(
             controller: _urlCtrl,
             obscureText: !_showUrl,
-            style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 13),
+            style: const TextStyle(fontSize: 13),
             decoration: InputDecoration(
               labelText: 'Incoming Webhook URL',
               hintText: 'https://hooks.slack.com/services/…',
@@ -1430,7 +1430,7 @@ class _TeamsNotificationCardState extends State<_TeamsNotificationCard> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Post to Teams on build completion',
-                  style: TextStyle(color: Color(0xFFE6EDF3), fontSize: 13)),
+                  style: TextStyle(fontSize: 13)),
               Switch(
                 value: _enabled,
                 onChanged: (v) => setState(() => _enabled = v),
@@ -1442,7 +1442,7 @@ class _TeamsNotificationCardState extends State<_TeamsNotificationCard> {
           TextField(
             controller: _urlCtrl,
             obscureText: !_showUrl,
-            style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 13),
+            style: const TextStyle(fontSize: 13),
             decoration: InputDecoration(
               labelText: 'Incoming Webhook URL',
               hintText: 'https://xxx.webhook.office.com/webhookb2/…',
@@ -1575,7 +1575,7 @@ class _GoogleChatNotificationCardState
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Post to Google Chat on build completion',
-                  style: TextStyle(color: Color(0xFFE6EDF3), fontSize: 13)),
+                  style: TextStyle(fontSize: 13)),
               Switch(
                 value: _enabled,
                 onChanged: (v) => setState(() => _enabled = v),
@@ -1587,7 +1587,7 @@ class _GoogleChatNotificationCardState
           TextField(
             controller: _urlCtrl,
             obscureText: !_showUrl,
-            style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 13),
+            style: const TextStyle(fontSize: 13),
             decoration: InputDecoration(
               labelText: 'Webhook URL',
               hintText: 'https://chat.googleapis.com/v1/spaces/…',

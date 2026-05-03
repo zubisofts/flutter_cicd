@@ -66,7 +66,6 @@ class _HistoryContent extends StatelessWidget {
       },
       builder: (context, state) {
         return Scaffold(
-          backgroundColor: const Color(0xFF0D1117),
           body: Row(
             children: [
               // Run list
@@ -83,8 +82,7 @@ class _HistoryContent extends StatelessWidget {
                           const Text(
                             'Run History',
                             style: TextStyle(
-                              color: Color(0xFFE6EDF3),
-                              fontSize: 18,
+                                                            fontSize: 18,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -207,7 +205,7 @@ class _RunTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 10, 6, 10),
         color: isSelected
-            ? const Color(0xFF21262D)
+            ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
             : Colors.transparent,
         child: Row(
           children: [
@@ -226,8 +224,7 @@ class _RunTile extends StatelessWidget {
                   Text(
                     '${run.projectName} › ${run.envName} › ${run.versionLabel}',
                     style: const TextStyle(
-                      color: Color(0xFFE6EDF3),
-                      fontSize: 13,
+                                            fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
                     maxLines: 1,
@@ -238,8 +235,9 @@ class _RunTile extends StatelessWidget {
                     '${fmt.format(run.startedAt)}  •  '
                     '${run.branch}  •  '
                     '${_duration(run.durationSeconds)}',
-                    style: const TextStyle(
-                        color: Color(0xFF8B949E), fontSize: 11),
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 11),
                   ),
                 ],
               ),
@@ -305,8 +303,7 @@ class _RunDetail extends StatelessWidget {
                     child: Text(
                       '${run.projectName} › ${run.envName} › ${run.versionLabel}',
                       style: const TextStyle(
-                        color: Color(0xFFE6EDF3),
-                        fontSize: 16,
+                                                fontSize: 16,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -349,8 +346,9 @@ class _RunDetail extends StatelessWidget {
               Text(
                 'Run ID: ${run.id}  •  Branch: ${run.branch}  •  '
                 'Platforms: ${run.platforms}  •  Targets: ${run.targets}',
-                style: const TextStyle(
-                    color: Color(0xFF8B949E), fontSize: 12),
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 12),
               ),
             ],
           ),
@@ -365,12 +363,12 @@ class _RunDetail extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                       child: Text(
                         'STEPS',
                         style: TextStyle(
-                          color: Color(0xFF8B949E),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                           fontSize: 10,
                           letterSpacing: 1.0,
                           fontWeight: FontWeight.w600,
@@ -394,12 +392,12 @@ class _RunDetail extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                       child: Text(
                         'LOG OUTPUT',
                         style: TextStyle(
-                          color: Color(0xFF8B949E),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                           fontSize: 10,
                           letterSpacing: 1.0,
                           fontWeight: FontWeight.w600,
@@ -408,15 +406,15 @@ class _RunDetail extends StatelessWidget {
                     ),
                     Expanded(
                       child: logLines.isEmpty
-                          ? const Center(
+                          ? Center(
                               child: Text('No log file found',
                                   style: TextStyle(
-                                      color: Color(0xFF8B949E),
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
                                       fontSize: 13)))
                           : LogViewer(
-                              logs: logLines
-                                  .map(LogLine.fromLogFile)
-                                  .toList(),
+                              logs: logLines.map(LogLine.fromLogFile).toList(),
                               autoScroll: false,
                             ),
                     ),
@@ -469,14 +467,15 @@ class _StepHistoryRow extends StatelessWidget {
             child: Text(
               step.stepName,
               style: const TextStyle(
-                  color: Color(0xFFE6EDF3), fontSize: 12),
+                  fontSize: 12),
             ),
           ),
           if (step.durationSeconds != null)
             Text(
               step.durationSeconds! == 0 ? '< 1s' : '${step.durationSeconds}s',
-              style: const TextStyle(
-                  color: Color(0xFF8B949E), fontSize: 11),
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 11),
             ),
         ],
       ),
@@ -541,7 +540,10 @@ class _DurationSparkline extends StatelessWidget {
       height: 36,
       width: double.infinity,
       child: CustomPaint(
-        painter: _SparklinePainter(recent),
+        painter: _SparklinePainter(
+          recent,
+          lineColor: Theme.of(context).colorScheme.outline,
+        ),
       ),
     );
   }
@@ -549,7 +551,8 @@ class _DurationSparkline extends StatelessWidget {
 
 class _SparklinePainter extends CustomPainter {
   final List<RunRecord> runs;
-  _SparklinePainter(this.runs);
+  final Color lineColor;
+  _SparklinePainter(this.runs, {required this.lineColor});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -573,7 +576,7 @@ class _SparklinePainter extends CustomPainter {
     canvas.drawPath(
       path,
       Paint()
-        ..color = const Color(0xFF30363D)
+        ..color = lineColor
         ..strokeWidth = 1.5
         ..style = PaintingStyle.stroke,
     );
@@ -590,5 +593,6 @@ class _SparklinePainter extends CustomPainter {
   @override
   bool shouldRepaint(_SparklinePainter old) =>
       old.runs.length != runs.length ||
+      old.lineColor != lineColor ||
       (runs.isNotEmpty && old.runs.last.id != runs.last.id);
 }

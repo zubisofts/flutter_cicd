@@ -85,7 +85,6 @@ class _ExecutionScreenState extends State<ExecutionScreen> {
       child: BlocBuilder<ExecutionBloc, ExecutionState>(
         builder: (context, state) {
           return Scaffold(
-            backgroundColor: const Color(0xFF0D1117),
             body: Column(
               children: [
                 _Header(
@@ -210,7 +209,6 @@ class _Header extends StatelessWidget {
                 '${request.projectId} › ${request.envName} › '
                 '${request.versionName}+${request.buildNumber}',
                 style: const TextStyle(
-                  color: Color(0xFFE6EDF3),
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
