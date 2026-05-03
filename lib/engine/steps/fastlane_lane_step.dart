@@ -39,12 +39,16 @@ class FastlaneLaneStep extends PipelineStep {
 
     await _ensureFastlaneScaffolded(ctx, shellEnv);
 
+    // Support "platform lane" syntax (e.g. "android upload_playstore") so
+    // callers can target a specific platform block in their Fastfile.
+    final laneParts = lane.trim().split(RegExp(r'\s+'));
+
     // Use `bundle exec fastlane` when a Gemfile exists, otherwise system fastlane.
     // ProcessRunner resolves the executable to an absolute path automatically.
     final hasGemfile = await File(p.join(ctx.workspaceDir, 'Gemfile')).exists();
     final command = hasGemfile
-        ? ['bundle', 'exec', 'fastlane', lane]
-        : ['fastlane', lane];
+        ? ['bundle', 'exec', 'fastlane', ...laneParts]
+        : ['fastlane', ...laneParts];
 
     final result = await _runner.run(
       command: command,
@@ -90,43 +94,40 @@ class FastlaneLaneStep extends PipelineStep {
         'Fastfile scaffolded at ${fastlaneDir.path}');
   }
 
+  // Top-level lanes (no platform blocks) so `fastlane <lane>` works directly
+  // without needing a platform prefix. Fastlane actions like pilot and
+  // upload_to_play_store know their own platform — they don't need a block.
   String _defaultFastfile() => r'''
-default_platform(:ios)
-
-platform :ios do
-  desc "Upload IPA to TestFlight"
-  lane :upload_testflight do
-    api_key = app_store_connect_api_key(
-      key_id:         ENV["ASC_KEY_ID"],
-      issuer_id:      ENV["ASC_ISSUER_ID"],
-      key_content:    ENV["ASC_KEY_CONTENT"],
-      is_key_content_base64: true,
-      in_house:       false,
-    )
-    pilot(
-      api_key:                         api_key,
-      ipa:                             ENV["IPA_PATH"],
-      team_id:                         ENV["APPLE_TEAM_ID"],
-      skip_waiting_for_build_processing: true,
-      skip_submission:                 true,
-    )
-  end
+desc "Upload IPA to TestFlight"
+lane :upload_testflight do
+  api_key = app_store_connect_api_key(
+    key_id:         ENV["ASC_KEY_ID"],
+    issuer_id:      ENV["ASC_ISSUER_ID"],
+    key_content:    ENV["ASC_KEY_CONTENT"],
+    is_key_content_base64: true,
+    in_house:       false,
+  )
+  pilot(
+    api_key:                           api_key,
+    ipa:                               ENV["IPA_PATH"],
+    team_id:                           ENV["APPLE_TEAM_ID"],
+    skip_waiting_for_build_processing: true,
+    skip_submission:                   true,
+  )
 end
 
-platform :android do
-  desc "Upload AAB to Play Store"
-  lane :upload_playstore do
-    upload_to_play_store(
-      track:               ENV["PLAY_TRACK"],
-      aab:                 ENV["AAB_PATH"],
-      json_key:            ENV["PLAY_STORE_JSON_KEY"],
-      rollout:             (ENV["ROLLOUT_PERCENTAGE"].to_f / 100).to_s,
-      skip_upload_apk:     true,
-      skip_upload_metadata: true,
-      skip_upload_images:  true,
-      skip_upload_screenshots: true,
-    )
-  end
+desc "Upload AAB to Play Store"
+lane :upload_playstore do
+  upload_to_play_store(
+    track:                   ENV["PLAY_TRACK"],
+    aab:                     ENV["AAB_PATH"],
+    json_key:                ENV["PLAY_STORE_JSON_KEY"],
+    rollout:                 (ENV["ROLLOUT_PERCENTAGE"].to_f / 100).to_s,
+    skip_upload_apk:         true,
+    skip_upload_metadata:    true,
+    skip_upload_images:      true,
+    skip_upload_screenshots: true,
+  )
 end
 ''';
 
