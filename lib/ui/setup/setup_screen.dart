@@ -68,6 +68,10 @@ class _SetupScreenContent extends StatelessWidget {
                       _PlatformSection(state: state),
                       const Gap(12),
                       _TargetSection(state: state),
+                      if (state.targets.contains('playstore')) ...[
+                        const Gap(12),
+                        _PlayStoreOptionsSection(state: state),
+                      ],
                       const Gap(24),
                       _ActionBar(state: state),
                     ],
@@ -636,6 +640,84 @@ class _TargetSection extends StatelessWidget {
         selected: state.targets,
         onToggle: (t) =>
             context.read<SetupBloc>().add(TargetToggled(t)),
+      ),
+    );
+  }
+}
+
+class _PlayStoreOptionsSection extends StatefulWidget {
+  final SetupState state;
+  const _PlayStoreOptionsSection({required this.state});
+
+  @override
+  State<_PlayStoreOptionsSection> createState() =>
+      _PlayStoreOptionsSectionState();
+}
+
+class _PlayStoreOptionsSectionState extends State<_PlayStoreOptionsSection> {
+  late final TextEditingController _notesCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _notesCtrl = TextEditingController(text: widget.state.releaseNotes);
+  }
+
+  @override
+  void dispose() {
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bloc = context.read<SetupBloc>();
+    final cs = Theme.of(context).colorScheme;
+    return SectionCard(
+      title: 'PLAY STORE OPTIONS',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _notesCtrl,
+            maxLines: 3,
+            minLines: 1,
+            style: const TextStyle(fontSize: 13),
+            decoration: const InputDecoration(
+              labelText: 'Release notes (optional)',
+              hintText: "What's new in this release?",
+              alignLabelWithHint: true,
+            ),
+            onChanged: (v) => bloc.add(ReleaseNotesChanged(v)),
+          ),
+          const Gap(16),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Managed publishing',
+                      style: TextStyle(fontSize: 13, color: cs.onSurface),
+                    ),
+                    const Gap(2),
+                    Text(
+                      'Upload as draft — publish manually from the Play Console',
+                      style: TextStyle(
+                          fontSize: 11, color: cs.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: widget.state.managedPublishing,
+                onChanged: (_) =>
+                    bloc.add(const ManagedPublishingToggled()),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -35,7 +35,20 @@ class FastlaneLaneStep extends PipelineStep {
       'MATCH_APP_IDENTIFIER': env.iosBundleId,
       'FL_BUILD_NUMBER': '${env.buildNumber}',
       'FL_VERSION_NUMBER': env.resolvedVersion,
+      'RELEASE_NOTES': ctx.options.releaseNotes ?? '',
+      'MANAGED_PUBLISHING': ctx.options.managedPublishing ? 'true' : 'false',
     };
+
+    // Play Store requires an App Bundle — APKs are rejected by Google for new
+    // apps and exceed the 150 MB APK size limit enforced by Play Store.
+    final laneBaseName = lane.trim().split(RegExp(r'\s+')).last;
+    if (laneBaseName == 'upload_playstore' && shellEnv['AAB_PATH']!.isEmpty) {
+      throw FatalPipelineException(
+        stepId: id,
+        message: 'Play Store upload requires an App Bundle (.aab). '
+            'Set `artifact: appbundle` on your flutter_build step.',
+      );
+    }
 
     await _ensureFastlaneScaffolded(ctx, shellEnv);
 
@@ -107,35 +120,30 @@ lane :upload_testflight do
     is_key_content_base64: true,
     in_house:       false,
   )
+  notes = ENV.fetch("RELEASE_NOTES", "")
   pilot(
     api_key:                           api_key,
     ipa:                               ENV["IPA_PATH"],
     team_id:                           ENV["APPLE_TEAM_ID"],
+    changelog:                         notes.empty? ? nil : notes,
     skip_waiting_for_build_processing: true,
     skip_submission:                   true,
   )
 end
 
-desc "Upload AAB/APK to Play Store"
+desc "Upload AAB to Play Store"
 lane :upload_playstore do
-  aab_path = ENV.fetch("AAB_PATH", "")
-  apk_path = ENV.fetch("APK_PATH", "")
-  opts = {
-    track:                   ENV["PLAY_TRACK"],
-    json_key:                ENV["PLAY_STORE_JSON_KEY"],
-    rollout:                 (ENV["ROLLOUT_PERCENTAGE"].to_f / 100).to_s,
-    skip_upload_metadata:    true,
-    skip_upload_images:      true,
-    skip_upload_screenshots: true,
-  }
-  unless aab_path.empty?
-    opts[:aab]             = aab_path
-    opts[:skip_upload_apk] = true
-  else
-    opts[:apk]             = apk_path
-    opts[:skip_upload_apk] = false
-  end
-  upload_to_play_store(opts)
+  upload_to_play_store(
+    track:                        ENV["PLAY_TRACK"],
+    aab:                          ENV["AAB_PATH"],
+    json_key:                     ENV["PLAY_STORE_JSON_KEY"],
+    rollout:                      (ENV["ROLLOUT_PERCENTAGE"].to_f / 100).to_s,
+    skip_upload_apk:              true,
+    skip_upload_metadata:         true,
+    skip_upload_images:           true,
+    skip_upload_screenshots:      true,
+    changes_not_sent_for_review:  ENV.fetch("MANAGED_PUBLISHING", "false") == "true",
+  )
 end
 ''';
 
