@@ -16,6 +16,9 @@ class ConfigRepository {
   String _projectDir(String projectId) =>
       p.join(baseDir, 'projects', projectId);
 
+  String pipelineYamlPath(String projectId) =>
+      p.join(_projectDir(projectId), 'pipelines', 'mobile.yaml');
+
   Future<List<AppProject>> listProjects() async {
     final dir = Directory(p.join(baseDir, 'projects'));
     if (!await dir.exists()) return [];
