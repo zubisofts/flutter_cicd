@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -519,13 +520,17 @@ class _FirebaseCardState extends State<_FirebaseCard> {
   late TextEditingController _playStoreCtrl;
   late TextEditingController _groupsCtrl;
 
+  // Holds new JSON content after the user picks a file — null until a file is picked
+  String? _pendingFirebaseContent;
+  String? _pendingPlayStoreContent;
+
   @override
   void initState() {
     super.initState();
     _serviceAccountCtrl = TextEditingController(
-        text: widget.state.firebaseServiceAccountPath);
-    _playStoreCtrl =
-        TextEditingController(text: widget.state.playStoreKeyPath);
+        text: widget.state.firebaseServiceAccountEmail);
+    _playStoreCtrl = TextEditingController(
+        text: widget.state.playStoreKeyEmail);
     _groupsCtrl =
         TextEditingController(text: widget.state.firebaseTesterGroups);
   }
@@ -535,9 +540,11 @@ class _FirebaseCardState extends State<_FirebaseCard> {
     super.didUpdateWidget(old);
     if (old.state.selectedEnv != widget.state.selectedEnv ||
         old.state.projectId != widget.state.projectId) {
-      _serviceAccountCtrl.text = widget.state.firebaseServiceAccountPath;
-      _playStoreCtrl.text = widget.state.playStoreKeyPath;
+      _serviceAccountCtrl.text = widget.state.firebaseServiceAccountEmail;
+      _playStoreCtrl.text = widget.state.playStoreKeyEmail;
       _groupsCtrl.text = widget.state.firebaseTesterGroups;
+      _pendingFirebaseContent = null;
+      _pendingPlayStoreContent = null;
     }
   }
 
@@ -549,18 +556,45 @@ class _FirebaseCardState extends State<_FirebaseCard> {
     super.dispose();
   }
 
-  Future<void> _pickJson(TextEditingController ctrl) async {
+  Future<void> _pickFirebaseJson() async {
     const typeGroup = XTypeGroup(label: 'JSON', extensions: ['json']);
     final file = await openFile(acceptedTypeGroups: [typeGroup]);
-    if (file != null && mounted) setState(() => ctrl.text = file.path);
+    if (file == null || !mounted) return;
+    final content = await file.readAsString();
+    String email = '';
+    try {
+      final j = jsonDecode(content) as Map<String, dynamic>;
+      email = j['client_email'] as String? ?? '';
+    } catch (_) {}
+    setState(() {
+      _pendingFirebaseContent = content;
+      _serviceAccountCtrl.text = email.isNotEmpty ? email : file.name;
+    });
+  }
+
+  Future<void> _pickPlayStoreJson() async {
+    const typeGroup = XTypeGroup(label: 'JSON', extensions: ['json']);
+    final file = await openFile(acceptedTypeGroups: [typeGroup]);
+    if (file == null || !mounted) return;
+    final content = await file.readAsString();
+    String email = '';
+    try {
+      final j = jsonDecode(content) as Map<String, dynamic>;
+      email = j['client_email'] as String? ?? '';
+    } catch (_) {}
+    setState(() {
+      _pendingPlayStoreContent = content;
+      _playStoreCtrl.text = email.isNotEmpty ? email : file.name;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final bloc = context.read<SettingsBloc>();
     final hasServiceAccount =
-        widget.state.firebaseServiceAccountPath.isNotEmpty;
-    final hasPlayStore = widget.state.playStoreKeyPath.isNotEmpty;
+        widget.state.firebaseServiceAccountConfigured || _pendingFirebaseContent != null;
+    final hasPlayStore =
+        widget.state.playStoreKeyConfigured || _pendingPlayStoreContent != null;
 
     return SectionCard(
       title: 'FIREBASE & PLAY STORE',
@@ -602,7 +636,7 @@ class _FirebaseCardState extends State<_FirebaseCard> {
                   style: const TextStyle(
                       color: Color(0xFFE6EDF3), fontSize: 13),
                   decoration: const InputDecoration(
-                    labelText: 'Firebase service account JSON',
+                    labelText: 'Firebase service account',
                     hintText: 'Select a service account .json file',
                     prefixIcon: Icon(Icons.local_fire_department,
                         size: 16, color: Color(0xFF8B949E)),
@@ -611,7 +645,7 @@ class _FirebaseCardState extends State<_FirebaseCard> {
               ),
               const Gap(8),
               OutlinedButton(
-                onPressed: () => _pickJson(_serviceAccountCtrl),
+                onPressed: _pickFirebaseJson,
                 child: const Text('Browse'),
               ),
             ],
@@ -620,8 +654,15 @@ class _FirebaseCardState extends State<_FirebaseCard> {
           Align(
             alignment: Alignment.centerRight,
             child: ElevatedButton.icon(
-              onPressed: () => bloc.add(FirebaseServiceAccountSaved(
-                  _serviceAccountCtrl.text.trim())),
+              onPressed: _pendingFirebaseContent == null
+                  ? null
+                  : () {
+                      bloc.add(FirebaseServiceAccountSaved(
+                        _pendingFirebaseContent!,
+                        displayEmail: _serviceAccountCtrl.text,
+                      ));
+                      setState(() => _pendingFirebaseContent = null);
+                    },
               icon: const Icon(Icons.save, size: 14),
               label: const Text('Save to Keychain'),
             ),
@@ -653,7 +694,7 @@ class _FirebaseCardState extends State<_FirebaseCard> {
                   style: const TextStyle(
                       color: Color(0xFFE6EDF3), fontSize: 13),
                   decoration: const InputDecoration(
-                    labelText: 'Play Store service account JSON',
+                    labelText: 'Play Store service account',
                     hintText: 'Select a service account .json file',
                     prefixIcon:
                         Icon(Icons.shop, size: 16, color: Color(0xFF8B949E)),
@@ -662,7 +703,7 @@ class _FirebaseCardState extends State<_FirebaseCard> {
               ),
               const Gap(8),
               OutlinedButton(
-                onPressed: () => _pickJson(_playStoreCtrl),
+                onPressed: _pickPlayStoreJson,
                 child: const Text('Browse'),
               ),
             ],
@@ -671,8 +712,15 @@ class _FirebaseCardState extends State<_FirebaseCard> {
           Align(
             alignment: Alignment.centerRight,
             child: ElevatedButton.icon(
-              onPressed: () => bloc
-                  .add(PlayStoreKeyPathSaved(_playStoreCtrl.text.trim())),
+              onPressed: _pendingPlayStoreContent == null
+                  ? null
+                  : () {
+                      bloc.add(PlayStoreKeyPathSaved(
+                        _pendingPlayStoreContent!,
+                        displayEmail: _playStoreCtrl.text,
+                      ));
+                      setState(() => _pendingPlayStoreContent = null);
+                    },
               icon: const Icon(Icons.save, size: 14),
               label: const Text('Save to Keychain'),
             ),

@@ -64,25 +64,29 @@ class CredentialStore {
   }
 
   // ── Firebase ──────────────────────────────────────────────────────────────
-  // Uses a Google Service Account JSON file (GOOGLE_APPLICATION_CREDENTIALS).
-  // The legacy firebase login:ci token approach is deprecated by Google.
+  // Stores the full service account JSON content in Keychain.
+  // At build time the content is written to a temp file for the duration of
+  // the run, then deleted. This means the user's source file can be moved or
+  // deleted without breaking builds.
 
-  Future<void> saveFirebaseServiceAccountPath(String path) async {
-    await _storage.write(key: 'cicd.firebase.service_account_path', value: path);
+  Future<void> saveFirebaseServiceAccount(String jsonContent) async {
+    await _storage.write(
+        key: 'cicd.firebase.service_account', value: jsonContent);
   }
 
-  Future<String> loadFirebaseServiceAccountPath() async {
-    return await _storage.read(key: 'cicd.firebase.service_account_path') ?? '';
+  Future<String> loadFirebaseServiceAccount() async {
+    return await _storage.read(key: 'cicd.firebase.service_account') ?? '';
   }
 
   // ── Play Store ────────────────────────────────────────────────────────────
+  // Same approach: stores JSON content, not path.
 
-  Future<void> savePlayStoreKeyPath(String path) async {
-    await _storage.write(key: 'cicd.playstore.json_key_path', value: path);
+  Future<void> savePlayStoreKey(String jsonContent) async {
+    await _storage.write(key: 'cicd.playstore.json_key', value: jsonContent);
   }
 
-  Future<String> loadPlayStoreKeyPath() async {
-    return await _storage.read(key: 'cicd.playstore.json_key_path') ?? '';
+  Future<String> loadPlayStoreKey() async {
+    return await _storage.read(key: 'cicd.playstore.json_key') ?? '';
   }
 
   // ── App Store Connect API Key (replaces username/password for TestFlight) ──

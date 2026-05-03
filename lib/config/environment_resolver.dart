@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:path/path.dart' as p;
 import 'models/env_config.dart';
 import 'models/resolved_environment.dart';
 import 'config_repository.dart';
@@ -15,6 +16,7 @@ class EnvironmentResolver {
     required String projectId,
     required String envName,
     required BuildOptions options,
+    required String runId,
   }) async {
     final project = await _repo.loadProject(projectId);
     final envConfig = await _repo.loadEnv(projectId, envName);
@@ -36,9 +38,23 @@ class EnvironmentResolver {
       projectId: projectId,
       envName: envName,
     );
-    final firebaseServiceAccountPath =
-        await _credentials.loadFirebaseServiceAccountPath();
-    final playStoreKeyPath = await _credentials.loadPlayStoreKeyPath();
+
+    // Service account JSON content is stored in Keychain.
+    // Write to a per-run temp file so the process can reference a file path.
+    // The pipeline runner deletes the temp dir when the run finishes.
+    final firebaseContent = await _credentials.loadFirebaseServiceAccount();
+    final playStoreContent = await _credentials.loadPlayStoreKey();
+
+    final firebaseCredPath = await _writeTempCredential(
+      runId: runId,
+      filename: 'firebase_sa.json',
+      content: firebaseContent,
+    );
+    final playStoreCredPath = await _writeTempCredential(
+      runId: runId,
+      filename: 'play_store_sa.json',
+      content: playStoreContent,
+    );
 
     // Merge signing config: Keychain values override YAML placeholders
     final resolvedSigning = androidCreds.isConfigured
@@ -54,8 +70,8 @@ class EnvironmentResolver {
       envConfig: envConfig,
       androidCreds: androidCreds,
       appleApiKey: appleApiKey,
-      firebaseServiceAccountPath: firebaseServiceAccountPath,
-      playStoreKeyPath: playStoreKeyPath,
+      firebaseCredPath: firebaseCredPath,
+      playStoreCredPath: playStoreCredPath,
     );
 
     return ResolvedEnvironment(
@@ -80,12 +96,43 @@ class EnvironmentResolver {
     );
   }
 
+  // Writes credential JSON content to ~/.cicd/.credentials/<runId>/<filename>.
+  // Returns the path, or '' if content is empty.
+  // The directory is scoped to the run ID so parallel future runs won't clash,
+  // and the pipeline runner deletes the whole dir when the run finishes.
+  static Future<String> _writeTempCredential({
+    required String runId,
+    required String filename,
+    required String content,
+  }) async {
+    if (content.isEmpty) return '';
+    final home = Platform.environment['HOME'] ?? '/tmp';
+    final dir = Directory(p.join(home, '.cicd', '.credentials', runId));
+    await dir.create(recursive: true);
+    final file = File(p.join(dir.path, filename));
+    await file.writeAsString(content, flush: true);
+    return file.path;
+  }
+
+  // Called by PipelineRunner after a run finishes.
+  static Future<void> cleanTempCredentials(String runId) async {
+    final home = Platform.environment['HOME'];
+    if (home == null) return;
+    final dir =
+        Directory(p.join(home, '.cicd', '.credentials', runId));
+    if (await dir.exists()) {
+      try {
+        await dir.delete(recursive: true);
+      } catch (_) {}
+    }
+  }
+
   Map<String, String> _buildShellEnv({
     required EnvConfig envConfig,
     required AndroidSigningCredentials androidCreds,
     required AppleApiKey appleApiKey,
-    required String firebaseServiceAccountPath,
-    required String playStoreKeyPath,
+    required String firebaseCredPath,
+    required String playStoreCredPath,
   }) {
     final sysEnv = Platform.environment;
     return {
@@ -97,13 +144,12 @@ class EnvironmentResolver {
           ? androidCreds.keyPassword
           : sysEnv[envConfig.android.signing.keyPasswordEnv] ?? '',
 
-      // Firebase App Distribution — service account JSON (ADC)
-      // Replaces the deprecated firebase login:ci token approach.
-      'GOOGLE_APPLICATION_CREDENTIALS': firebaseServiceAccountPath.isNotEmpty
-          ? firebaseServiceAccountPath
+      // Firebase App Distribution — service account written to a temp file
+      'GOOGLE_APPLICATION_CREDENTIALS': firebaseCredPath.isNotEmpty
+          ? firebaseCredPath
           : sysEnv['GOOGLE_APPLICATION_CREDENTIALS'] ?? '',
 
-      // App Store Connect API Key (replaces FASTLANE_USER/PASSWORD)
+      // App Store Connect API Key
       'ASC_KEY_ID': appleApiKey.keyId.isNotEmpty
           ? appleApiKey.keyId
           : sysEnv['ASC_KEY_ID'] ?? '',
@@ -114,9 +160,9 @@ class EnvironmentResolver {
           ? base64Encode(utf8.encode(appleApiKey.privateKeyContent))
           : sysEnv['ASC_KEY_CONTENT'] ?? '',
 
-      // Play Store JSON key — Keychain path first, then env var
-      'PLAY_STORE_JSON_KEY': playStoreKeyPath.isNotEmpty
-          ? playStoreKeyPath
+      // Play Store — service account written to a temp file
+      'PLAY_STORE_JSON_KEY': playStoreCredPath.isNotEmpty
+          ? playStoreCredPath
           : sysEnv['PLAY_STORE_JSON_KEY'] ?? '',
     };
   }

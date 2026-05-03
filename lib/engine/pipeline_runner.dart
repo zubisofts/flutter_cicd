@@ -134,6 +134,7 @@ class PipelineRunner {
         projectId: request.projectId,
         envName: request.envName,
         options: options,
+        runId: runId,
       );
 
       // Load pipeline definition
@@ -340,6 +341,8 @@ class PipelineRunner {
       await _pruneXcodeDerivedData();
       // Keep only the 20 most recent run directories.
       await _pruneOldRuns(keep: 20);
+      // Delete the per-run credential temp files written by EnvironmentResolver.
+      await EnvironmentResolver.cleanTempCredentials(runId);
     }
   }
 
