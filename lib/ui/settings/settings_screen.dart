@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -121,12 +122,37 @@ class _Header extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Project Settings',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-            ),
+          Row(
+            children: [
+              const Text(
+                'Project Settings',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Spacer(),
+              Tooltip(
+                message: 'Open pipeline.yaml in editor',
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    final path = getIt<ConfigRepository>()
+                        .pipelineYamlPath(state.projectId);
+                    Process.run('/usr/bin/open', [path]);
+                  },
+                  icon: const Icon(Icons.code, size: 14),
+                  label: const Text('pipeline.yaml'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                    side: BorderSide(
+                        color: Theme.of(context).colorScheme.outline),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    textStyle: const TextStyle(fontSize: 12),
+                  ),
+                ),
+              ),
+            ],
           ),
           const Gap(4),
           Text(

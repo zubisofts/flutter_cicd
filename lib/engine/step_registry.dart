@@ -7,7 +7,9 @@ import 'steps/flutter_pub_get_step.dart';
 import 'steps/flutter_build_step.dart';
 import 'steps/firebase_distribute_step.dart';
 import 'steps/fastlane_lane_step.dart';
+import 'steps/flutter_test_step.dart';
 import 'steps/ios_archive_step.dart';
+import 'steps/shell_script_step.dart';
 
 typedef StepFactory = PipelineStep Function(StepDefinition definition);
 
@@ -40,7 +42,9 @@ class StepRegistry {
     r.register('flutter_build', (d) => FlutterBuildStep(d));
     r.register('firebase_distribute', (d) => FirebaseDistributeStep(d));
     r.register('fastlane_lane', (d) => FastlaneLaneStep(d));
+    r.register('flutter_test', (d) => FlutterTestStep(d));
     r.register('ios_archive', (d) => IosArchiveStep(d));
+    r.register('shell_script', (d) => ShellScriptStep(d));
     return r;
   }
 }
