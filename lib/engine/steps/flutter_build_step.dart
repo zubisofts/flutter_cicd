@@ -17,7 +17,18 @@ class FlutterBuildStep extends PipelineStep {
   @override
   Future<StepResult> execute(PipelineContext ctx) async {
     final platform = definition.params['platform'] as String;
-    final artifact = definition.params['artifact'] as String? ?? 'apk';
+    final rawArtifact = definition.params['artifact'] as String? ?? 'apk';
+
+    // Upgrade apk → appbundle when Play Store is targeted, unless this step is
+    // explicitly the firebase-only APK build (condition: firebase_android).
+    // This keeps old single-step mobile.yaml files working without manual edits.
+    final artifact = (rawArtifact == 'apk' &&
+            platform == 'android' &&
+            definition.condition != 'firebase_android' &&
+            ctx.options.targets.contains('playstore'))
+        ? 'appbundle'
+        : rawArtifact;
+
     final env = ctx.environment;
 
     // iOS IPA is handled entirely by the ios_archive step (flutter build ipa).
