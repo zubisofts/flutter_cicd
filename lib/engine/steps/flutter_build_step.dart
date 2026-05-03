@@ -64,6 +64,12 @@ class FlutterBuildStep extends PipelineStep {
         _resolveArtifactPath(ctx.workspaceDir, platform, artifact, flavor: flavor);
     if (artifactPath != null) {
       ctx.putArtifact(platform, artifactPath);
+      if (platform == 'android') {
+        ctx.putArtifact(
+          artifact == 'appbundle' ? 'android_aab' : 'android_apk',
+          artifactPath,
+        );
+      }
       ctx.logSink.addRaw(id, LogLevel.success, 'Artifact: $artifactPath');
     }
 

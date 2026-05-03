@@ -25,8 +25,8 @@ class FastlaneLaneStep extends PipelineStep {
       'BUNDLE_ID': env.iosBundleId,
       'ANDROID_PACKAGE_NAME': env.androidPackageName,
       'IPA_PATH': ctx.artifactPath('ios') ?? '',
-      'AAB_PATH': ctx.artifactPath('android') ?? '',
-      'APK_PATH': ctx.artifactPath('android') ?? '',
+      'AAB_PATH': ctx.artifactPath('android_aab') ?? '',
+      'APK_PATH': ctx.artifactPath('android_apk') ?? ctx.artifactPath('android') ?? '',
       'ARTIFACTS_DIR': '${ctx.workspaceDir}/artifacts',
       'PLAY_TRACK': env.distributionRules.playStore?.track ?? 'internal',
       'ROLLOUT_PERCENTAGE':
@@ -116,18 +116,26 @@ lane :upload_testflight do
   )
 end
 
-desc "Upload AAB to Play Store"
+desc "Upload AAB/APK to Play Store"
 lane :upload_playstore do
-  upload_to_play_store(
+  aab_path = ENV.fetch("AAB_PATH", "")
+  apk_path = ENV.fetch("APK_PATH", "")
+  opts = {
     track:                   ENV["PLAY_TRACK"],
-    aab:                     ENV["AAB_PATH"],
     json_key:                ENV["PLAY_STORE_JSON_KEY"],
     rollout:                 (ENV["ROLLOUT_PERCENTAGE"].to_f / 100).to_s,
-    skip_upload_apk:         true,
     skip_upload_metadata:    true,
     skip_upload_images:      true,
     skip_upload_screenshots: true,
-  )
+  }
+  unless aab_path.empty?
+    opts[:aab]             = aab_path
+    opts[:skip_upload_apk] = true
+  else
+    opts[:apk]             = apk_path
+    opts[:skip_upload_apk] = false
+  end
+  upload_to_play_store(opts)
 end
 ''';
 
