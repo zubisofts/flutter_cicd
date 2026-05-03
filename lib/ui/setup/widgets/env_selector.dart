@@ -64,7 +64,7 @@ class _EnvChip extends StatelessWidget {
           color: isSelected ? _color.withValues(alpha:0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: isSelected ? _color : const Color(0xFF30363D),
+            color: isSelected ? _color : Theme.of(context).colorScheme.outline,
             width: 1.5,
           ),
         ),
