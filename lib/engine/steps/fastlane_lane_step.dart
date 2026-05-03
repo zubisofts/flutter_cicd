@@ -35,6 +35,8 @@ class FastlaneLaneStep extends PipelineStep {
       'MATCH_APP_IDENTIFIER': env.iosBundleId,
       'FL_BUILD_NUMBER': '${env.buildNumber}',
       'FL_VERSION_NUMBER': env.resolvedVersion,
+      'RELEASE_NOTES': ctx.options.releaseNotes ?? '',
+      'MANAGED_PUBLISHING': ctx.options.managedPublishing ? 'true' : 'false',
     };
 
     // Play Store requires an App Bundle — APKs are rejected by Google for new
@@ -118,10 +120,12 @@ lane :upload_testflight do
     is_key_content_base64: true,
     in_house:       false,
   )
+  notes = ENV.fetch("RELEASE_NOTES", "")
   pilot(
     api_key:                           api_key,
     ipa:                               ENV["IPA_PATH"],
     team_id:                           ENV["APPLE_TEAM_ID"],
+    changelog:                         notes.empty? ? nil : notes,
     skip_waiting_for_build_processing: true,
     skip_submission:                   true,
   )
@@ -130,14 +134,15 @@ end
 desc "Upload AAB to Play Store"
 lane :upload_playstore do
   upload_to_play_store(
-    track:                   ENV["PLAY_TRACK"],
-    aab:                     ENV["AAB_PATH"],
-    json_key:                ENV["PLAY_STORE_JSON_KEY"],
-    rollout:                 (ENV["ROLLOUT_PERCENTAGE"].to_f / 100).to_s,
-    skip_upload_apk:         true,
-    skip_upload_metadata:    true,
-    skip_upload_images:      true,
-    skip_upload_screenshots: true,
+    track:                        ENV["PLAY_TRACK"],
+    aab:                          ENV["AAB_PATH"],
+    json_key:                     ENV["PLAY_STORE_JSON_KEY"],
+    rollout:                      (ENV["ROLLOUT_PERCENTAGE"].to_f / 100).to_s,
+    skip_upload_apk:              true,
+    skip_upload_metadata:         true,
+    skip_upload_images:           true,
+    skip_upload_screenshots:      true,
+    changes_not_sent_for_review:  ENV.fetch("MANAGED_PUBLISHING", "false") == "true",
   )
 end
 ''';

@@ -51,6 +51,8 @@ class BuildOptions {
   final int buildNumber;
   final List<String> platforms;
   final List<String> targets;
+  final String? releaseNotes;
+  final bool managedPublishing;
 
   const BuildOptions({
     required this.projectId,
@@ -59,5 +61,7 @@ class BuildOptions {
     required this.buildNumber,
     required this.platforms,
     required this.targets,
+    this.releaseNotes,
+    this.managedPublishing = false,
   });
 }

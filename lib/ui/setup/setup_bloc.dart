@@ -67,6 +67,17 @@ class TargetToggled extends SetupEvent {
   List<Object?> get props => [target];
 }
 
+class ReleaseNotesChanged extends SetupEvent {
+  final String value;
+  const ReleaseNotesChanged(this.value);
+  @override
+  List<Object?> get props => [value];
+}
+
+class ManagedPublishingToggled extends SetupEvent {
+  const ManagedPublishingToggled();
+}
+
 class RunPipelineRequested extends SetupEvent {
   const RunPipelineRequested();
 }
@@ -119,6 +130,8 @@ class SetupState extends Equatable {
   final String? error;
   final bool requiresProductionConfirm;
   final bool readyToRun;
+  final String releaseNotes;
+  final bool managedPublishing;
 
   const SetupState({
     this.projects = const [],
@@ -138,6 +151,8 @@ class SetupState extends Equatable {
     this.error,
     this.requiresProductionConfirm = false,
     this.readyToRun = false,
+    this.releaseNotes = '',
+    this.managedPublishing = false,
   });
 
   bool get isValid =>
@@ -165,6 +180,8 @@ class SetupState extends Equatable {
     String? error,
     bool? requiresProductionConfirm,
     bool? readyToRun,
+    String? releaseNotes,
+    bool? managedPublishing,
     bool clearError = false,
     bool clearProject = false,
   }) =>
@@ -188,6 +205,8 @@ class SetupState extends Equatable {
         requiresProductionConfirm:
             requiresProductionConfirm ?? this.requiresProductionConfirm,
         readyToRun: readyToRun ?? this.readyToRun,
+        releaseNotes: releaseNotes ?? this.releaseNotes,
+        managedPublishing: managedPublishing ?? this.managedPublishing,
       );
 
   String get versionPreview {
@@ -214,6 +233,8 @@ class SetupState extends Equatable {
         error,
         requiresProductionConfirm,
         readyToRun,
+        releaseNotes,
+        managedPublishing,
       ];
 }
 
@@ -231,6 +252,10 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
     on<BuildNumberChanged>(_onBuildNumberChanged);
     on<PlatformToggled>(_onPlatformToggled);
     on<TargetToggled>(_onTargetToggled);
+    on<ReleaseNotesChanged>((e, emit) =>
+        emit(state.copyWith(releaseNotes: e.value)));
+    on<ManagedPublishingToggled>((_, emit) =>
+        emit(state.copyWith(managedPublishing: !state.managedPublishing)));
     on<RunPipelineRequested>(_onRunRequested);
     on<NewProjectRequested>(_onNewProject);
     on<ProjectDeleted>(_onProjectDeleted);
@@ -509,6 +534,8 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
       buildNumber: int.parse(state.buildNumber),
       platforms: state.platforms,
       targets: state.targets,
+      releaseNotes: state.releaseNotes.isEmpty ? null : state.releaseNotes,
+      managedPublishing: state.managedPublishing,
     );
   }
 }
