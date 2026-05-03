@@ -133,6 +133,15 @@ end
 
 desc "Upload AAB to Play Store"
 lane :upload_playstore do
+  notes        = ENV.fetch("RELEASE_NOTES", "")
+  build_number = ENV.fetch("FL_BUILD_NUMBER", "0")
+
+  unless notes.empty?
+    changelog_dir = "fastlane/metadata/android/en-US/changelogs"
+    FileUtils.mkdir_p(changelog_dir)
+    File.write("#{changelog_dir}/#{build_number}.txt", notes)
+  end
+
   upload_to_play_store(
     track:                        ENV["PLAY_TRACK"],
     aab:                          ENV["AAB_PATH"],
@@ -140,6 +149,7 @@ lane :upload_playstore do
     rollout:                      (ENV["ROLLOUT_PERCENTAGE"].to_f / 100).to_s,
     skip_upload_apk:              true,
     skip_upload_metadata:         true,
+    skip_upload_changelogs:       notes.empty?,
     skip_upload_images:           true,
     skip_upload_screenshots:      true,
     changes_not_sent_for_review:  ENV.fetch("MANAGED_PUBLISHING", "false") == "true",
