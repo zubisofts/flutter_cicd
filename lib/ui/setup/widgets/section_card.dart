@@ -24,8 +24,8 @@ class SectionCard extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    color: Color(0xFF8B949E),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     fontSize: 11,
                     letterSpacing: 0.8,
                     fontWeight: FontWeight.w600,

@@ -128,7 +128,7 @@ class _CheckChip extends StatelessWidget {
           border: Border.all(
             color: item.checked
                 ? const Color(0xFF58A6FF)
-                : const Color(0xFF30363D),
+                : Theme.of(context).colorScheme.outline,
           ),
         ),
         child: Row(
@@ -156,7 +156,7 @@ class _CheckChip extends StatelessWidget {
               item.label,
               style: TextStyle(
                 color: item.checked
-                    ? const Color(0xFFE6EDF3)
+                    ? Theme.of(context).colorScheme.onSurface
                     : const Color(0xFF8B949E),
                 fontSize: 13,
                 fontWeight:

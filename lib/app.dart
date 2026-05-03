@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'di/injection.dart';
 import 'engine/pipeline_runner.dart';
+import 'services/theme_service.dart';
 import 'ui/execution/execution_bloc.dart';
 import 'ui/execution/execution_screen.dart';
 import 'ui/history/history_screen.dart';
@@ -63,11 +64,16 @@ class CicdApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      title: 'FlutterCI',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.dark,
-      routerConfig: _router,
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: getIt<ThemeService>(),
+      builder: (context, mode, child) => MaterialApp.router(
+        title: 'FlutterCI',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        themeMode: mode,
+        routerConfig: _router,
+      ),
     );
   }
 }

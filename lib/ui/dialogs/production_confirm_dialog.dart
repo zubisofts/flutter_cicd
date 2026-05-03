@@ -72,10 +72,10 @@ class _ProductionConfirmDialogState
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: const Color(0xFF0D1117),
+                color: Theme.of(context).scaffoldBackgroundColor,
                 borderRadius: BorderRadius.circular(6),
-                border: const Border.fromBorderSide(
-                    BorderSide(color: Color(0xFF30363D))),
+                border: Border.fromBorderSide(
+                    BorderSide(color: Theme.of(context).colorScheme.outline)),
               ),
               child: SelectableText(
                 '"${widget.requiredPhrase}"',

@@ -32,17 +32,13 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: const Color(0xFF161B22),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: const BorderSide(color: Color(0xFF30363D)),
+        side: BorderSide(color: Theme.of(context).colorScheme.outline),
       ),
       title: const Text(
         'Add New Project',
-        style: TextStyle(
-            color: Color(0xFFE6EDF3),
-            fontSize: 16,
-            fontWeight: FontWeight.w700),
+        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
       ),
       content: SizedBox(
         width: 400,

@@ -46,7 +46,6 @@ class _SetupScreenContent extends StatelessWidget {
       },
       builder: (context, state) {
         return Scaffold(
-          backgroundColor: const Color(0xFF0D1117),
           body: Row(
             children: [
               Expanded(
@@ -99,7 +98,6 @@ class _Header extends StatelessWidget {
         const Text(
           'Pipeline Setup',
           style: TextStyle(
-            color: Color(0xFFE6EDF3),
             fontSize: 22,
             fontWeight: FontWeight.w700,
           ),
@@ -196,10 +194,11 @@ class _ProjectSection extends StatelessWidget {
           : state.projects.isEmpty
               ? _EmptyProjects()
               : DropdownButtonFormField<String>(
-                  initialValue: state.selectedProject?.id,
-                  dropdownColor: const Color(0xFF161B22),
-                  style: const TextStyle(
-                      color: Color(0xFFE6EDF3), fontSize: 13),
+                  value: state.selectedProject?.id,
+                  dropdownColor: Theme.of(context).colorScheme.surface,
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: Theme.of(context).colorScheme.onSurface),
                   items: state.projects
                       .map((p) => DropdownMenuItem(
                             value: p.id,
@@ -226,9 +225,7 @@ Future<void> _confirmDeleteProject(
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
-      backgroundColor: const Color(0xFF161B22),
-      title: const Text('Delete Project',
-          style: TextStyle(color: Color(0xFFE6EDF3))),
+      title: const Text('Delete Project'),
       content: Text(
         'Delete "${project.name}"?\n\nThis removes all config, env files and bundled assets. '
         'It cannot be undone.',
@@ -259,10 +256,10 @@ class _EmptyProjects extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D1117),
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(6),
-        border: const Border.fromBorderSide(
-            BorderSide(color: Color(0xFF30363D))),
+        border: Border.fromBorderSide(
+            BorderSide(color: Theme.of(context).colorScheme.outline)),
       ),
       child: Column(
         children: const [
@@ -379,7 +376,7 @@ class _BranchAutocompleteState extends State<_BranchAutocomplete> {
         return TextField(
           controller: ctrl,
           focusNode: focusNode,
-          style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 13),
+          style: const TextStyle(fontSize: 13),
           decoration: InputDecoration(
             labelText: refsLoaded ? 'Branch or tag' : 'Branch name',
             hintText: 'main',
@@ -402,7 +399,7 @@ class _BranchAutocompleteState extends State<_BranchAutocomplete> {
         return Align(
           alignment: Alignment.topLeft,
           child: Material(
-            color: const Color(0xFF161B22),
+            color: Theme.of(context).colorScheme.surface,
             elevation: 4,
             borderRadius: BorderRadius.circular(6),
             child: ConstrainedBox(
@@ -434,7 +431,6 @@ class _BranchAutocompleteState extends State<_BranchAutocomplete> {
                             child: Text(
                               ref.name,
                               style: const TextStyle(
-                                color: Color(0xFFE6EDF3),
                                 fontSize: 13,
                               ),
                               overflow: TextOverflow.ellipsis,
@@ -582,7 +578,7 @@ class _VersionSectionState extends State<_VersionSection> {
             child: TextField(
               controller: _versionCtrl,
               style: const TextStyle(
-                  color: Color(0xFFE6EDF3), fontSize: 13),
+                  fontSize: 13),
               decoration: const InputDecoration(
                 labelText: 'Version name',
                 hintText: '1.0.0',
@@ -596,7 +592,7 @@ class _VersionSectionState extends State<_VersionSection> {
             child: TextField(
               controller: _buildCtrl,
               style: const TextStyle(
-                  color: Color(0xFFE6EDF3), fontSize: 13),
+                  fontSize: 13),
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
                 labelText: 'Build number',
@@ -688,7 +684,7 @@ class _VersionPreviewPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 240,
-      color: const Color(0xFF0D1117),
+      color: Theme.of(context).colorScheme.surface,
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -744,7 +740,6 @@ class _PreviewItem extends StatelessWidget {
           const Gap(2),
           Text(value,
               style: const TextStyle(
-                  color: Color(0xFFE6EDF3),
                   fontSize: 13,
                   fontWeight: FontWeight.w500)),
         ],

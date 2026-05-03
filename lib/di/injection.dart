@@ -10,12 +10,14 @@ import '../services/email_notification_service.dart';
 import '../services/google_chat_notification_service.dart';
 import '../services/slack_notification_service.dart';
 import '../services/teams_notification_service.dart';
+import '../services/theme_service.dart';
 import '../services/tray_service.dart';
 import '../ui/execution/execution_bloc.dart';
 
 final getIt = GetIt.instance;
 
-void setupDependencies() {
+void setupDependencies({required ThemeService themeService}) {
+  getIt.registerSingleton<ThemeService>(themeService);
   // Credentials (macOS Keychain)
   getIt.registerLazySingleton<CredentialStore>(() => CredentialStore());
   getIt.registerLazySingleton<EmailNotificationService>(

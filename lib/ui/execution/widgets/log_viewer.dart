@@ -190,12 +190,12 @@ class _ToolbarButton extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
-            color: const Color(0xFF21262D),
+            color: const Color(0xFF30363D),
             borderRadius: BorderRadius.circular(4),
             border: const Border.fromBorderSide(
-                BorderSide(color: Color(0xFF30363D))),
+                BorderSide(color: Color(0xFF484F58))),
           ),
-          child: Icon(icon, size: 14, color: const Color(0xFF8B949E)),
+          child: Icon(icon, size: 14, color: const Color(0xFFCBD3DC)),
         ),
       ),
     );
