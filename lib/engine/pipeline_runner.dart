@@ -23,6 +23,8 @@ class RunRequest {
   final List<String> targets;
   /// Step IDs to skip because they already succeeded in a prior run.
   final Set<String> skipStepIds;
+  final String? releaseNotes;
+  final bool managedPublishing;
 
   const RunRequest({
     required this.projectId,
@@ -34,6 +36,8 @@ class RunRequest {
     required this.platforms,
     required this.targets,
     this.skipStepIds = const {},
+    this.releaseNotes,
+    this.managedPublishing = false,
   });
 }
 
@@ -128,6 +132,8 @@ class PipelineRunner {
         buildNumber: request.buildNumber,
         platforms: request.platforms,
         targets: request.targets,
+        releaseNotes: request.releaseNotes,
+        managedPublishing: request.managedPublishing,
       );
 
       final env = await _envResolver.resolve(
