@@ -318,10 +318,17 @@ steps:
       max_attempts: 2
       delay_seconds: 5
 
+  - id: run_tests
+    type: flutter_test
+    name: "Run Tests"
+    depends_on: [install_deps]
+    abort_on_failure: true
+
   - id: build_android_apk
     type: flutter_build
     name: "Build Android APK"
     condition: "firebase_android"
+    depends_on: [run_tests]
     params:
       platform: android
       artifact: apk
@@ -331,6 +338,7 @@ steps:
     type: flutter_build
     name: "Build Android AAB"
     condition: "playstore"
+    depends_on: [run_tests]
     params:
       platform: android
       artifact: appbundle
@@ -340,6 +348,7 @@ steps:
     type: flutter_build
     name: "Build iOS"
     condition: "ios"
+    depends_on: [run_tests]
     params:
       platform: ios
       artifact: ipa
