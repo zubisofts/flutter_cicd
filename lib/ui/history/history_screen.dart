@@ -13,22 +13,24 @@ import '../shell/app_theme.dart';
 import '../../execution/log_line.dart';
 import 'history_bloc.dart';
 
-RunRequest _runRequestFrom(RunRecord run, {Set<String> skipStepIds = const {}}) =>
-    RunRequest(
-      projectId: run.projectId,
-      projectName: run.projectName,
-      branch: run.branch,
-      envName: run.envName,
-      versionName: run.versionLabel.split('+').first,
-      buildNumber: int.tryParse(
-              run.versionLabel.contains('+')
-                  ? run.versionLabel.split('+').last
-                  : '1') ??
-          1,
-      platforms: run.platforms.split(',').map((e) => e.trim()).toList(),
-      targets: run.targets.split(',').map((e) => e.trim()).toList(),
-      skipStepIds: skipStepIds,
-    );
+RunRequest _runRequestFrom(
+  RunRecord run, {
+  Set<String> skipStepIds = const {},
+}) => RunRequest(
+  projectId: run.projectId,
+  projectName: run.projectName,
+  branch: run.branch,
+  envName: run.envName,
+  versionName: run.versionLabel.split('+').first,
+  buildNumber:
+      int.tryParse(
+        run.versionLabel.contains('+') ? run.versionLabel.split('+').last : '1',
+      ) ??
+      1,
+  platforms: run.platforms.split(',').map((e) => e.trim()).toList(),
+  targets: run.targets.split(',').map((e) => e.trim()).toList(),
+  skipStepIds: skipStepIds,
+);
 
 class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});
@@ -36,8 +38,8 @@ class HistoryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => HistoryBloc(getIt<RunRepository>())
-        ..add(const HistoryLoaded()),
+      create: (_) =>
+          HistoryBloc(getIt<RunRepository>())..add(const HistoryLoaded()),
       child: const _HistoryContent(),
     );
   }
@@ -82,25 +84,30 @@ class _HistoryContent extends StatelessWidget {
                           const Text(
                             'Run History',
                             style: TextStyle(
-                                                            fontSize: 18,
+                              fontSize: 18,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                           if (state.runs.isNotEmpty) ...[
                             const Gap(8),
-                            Row(children: [
-                              _StatChip(
+                            Row(
+                              children: [
+                                _StatChip(
                                   label: '${state.runs.length} runs',
-                                  color: const Color(0xFF58A6FF)),
-                              const Gap(6),
-                              _StatChip(
+                                  color: const Color(0xFF58A6FF),
+                                ),
+                                const Gap(6),
+                                _StatChip(
                                   label: '${state.successCount} passed',
-                                  color: AppTheme.colorSuccess),
-                              const Gap(6),
-                              _StatChip(
+                                  color: AppTheme.colorSuccess,
+                                ),
+                                const Gap(6),
+                                _StatChip(
                                   label: state.successRate,
-                                  color: const Color(0xFF8B949E)),
-                            ]),
+                                  color: const Color(0xFF8B949E),
+                                ),
+                              ],
+                            ),
                             const Gap(10),
                             _DurationSparkline(runs: state.runs),
                           ],
@@ -110,14 +117,13 @@ class _HistoryContent extends StatelessWidget {
                     const Divider(height: 1),
                     Expanded(
                       child: state.isLoading
-                          ? const Center(
-                              child: CircularProgressIndicator())
+                          ? const Center(child: CircularProgressIndicator())
                           : state.runs.isEmpty
-                              ? _EmptyHistory()
-                              : _RunList(
-                                  runs: state.runs,
-                                  selectedId: state.selectedRun?.id,
-                                ),
+                          ? _EmptyHistory()
+                          : _RunList(
+                              runs: state.runs,
+                              selectedId: state.selectedRun?.id,
+                            ),
                     ),
                   ],
                 ),
@@ -144,6 +150,7 @@ class _HistoryContent extends StatelessWidget {
 class _StatChip extends StatelessWidget {
   final String label;
   final Color color;
+
   const _StatChip({required this.label, required this.color});
 
   @override
@@ -154,9 +161,14 @@ class _StatChip extends StatelessWidget {
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Text(label,
-          style: TextStyle(color: color, fontSize: 11,
-              fontWeight: FontWeight.w500)),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
     );
   }
 }
@@ -177,9 +189,8 @@ class _RunList extends StatelessWidget {
         return _RunTile(
           run: run,
           isSelected: run.id == selectedId,
-          onTap: () => context
-              .read<HistoryBloc>()
-              .add(HistoryRunSelected(run.id)),
+          onTap: () =>
+              context.read<HistoryBloc>().add(HistoryRunSelected(run.id)),
         );
       },
     );
@@ -212,9 +223,7 @@ class _RunTile extends StatelessWidget {
             Icon(
               run.success ? Icons.check_circle : Icons.cancel,
               size: 16,
-              color: run.success
-                  ? AppTheme.colorSuccess
-                  : AppTheme.colorError,
+              color: run.success ? AppTheme.colorSuccess : AppTheme.colorError,
             ),
             const Gap(10),
             Expanded(
@@ -224,7 +233,7 @@ class _RunTile extends StatelessWidget {
                   Text(
                     '${run.projectName} › ${run.envName} › ${run.versionLabel}',
                     style: const TextStyle(
-                                            fontSize: 13,
+                      fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
                     maxLines: 1,
@@ -236,8 +245,9 @@ class _RunTile extends StatelessWidget {
                     '${run.branch}  •  '
                     '${_duration(run.durationSeconds)}',
                     style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontSize: 11),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 11,
+                    ),
                   ),
                 ],
               ),
@@ -248,11 +258,9 @@ class _RunTile extends StatelessWidget {
               color: const Color(0xFF8B949E),
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
-              constraints:
-                  const BoxConstraints(minWidth: 28, minHeight: 28),
-              onPressed: () => context
-                  .read<HistoryBloc>()
-                  .add(HistoryRunDeleted(run.id)),
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              onPressed: () =>
+                  context.read<HistoryBloc>().add(HistoryRunDeleted(run.id)),
             ),
           ],
         ),
@@ -303,39 +311,43 @@ class _RunDetail extends StatelessWidget {
                     child: Text(
                       '${run.projectName} › ${run.envName} › ${run.versionLabel}',
                       style: const TextStyle(
-                                                fontSize: 16,
+                        fontSize: 16,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
                   const Gap(8),
                   OutlinedButton.icon(
-                    onPressed: () => context
-                        .read<HistoryBloc>()
-                        .add(HistoryRetryRequested(run.id)),
+                    onPressed: () => context.read<HistoryBloc>().add(
+                      HistoryRetryRequested(run.id),
+                    ),
                     icon: const Icon(Icons.replay, size: 14),
                     label: const Text('Retry'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFF58A6FF),
                       side: const BorderSide(color: Color(0xFF58A6FF)),
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       textStyle: const TextStyle(fontSize: 12),
                     ),
                   ),
                   if (!run.success) ...[
                     const Gap(8),
                     OutlinedButton.icon(
-                      onPressed: () => context
-                          .read<HistoryBloc>()
-                          .add(HistoryResumeRequested(run.id)),
+                      onPressed: () => context.read<HistoryBloc>().add(
+                        HistoryResumeRequested(run.id),
+                      ),
                       icon: const Icon(Icons.fast_forward, size: 14),
                       label: const Text('Resume'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFFDB8C39),
                         side: const BorderSide(color: Color(0xFFDB8C39)),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         textStyle: const TextStyle(fontSize: 12),
                       ),
                     ),
@@ -347,8 +359,9 @@ class _RunDetail extends StatelessWidget {
                 'Run ID: ${run.id}  •  Branch: ${run.branch}  •  '
                 'Platforms: ${run.platforms}  •  Targets: ${run.targets}',
                 style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontSize: 12),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 12,
+                ),
               ),
             ],
           ),
@@ -378,10 +391,11 @@ class _RunDetail extends StatelessWidget {
                     Expanded(
                       child: ListView.builder(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         itemCount: steps.length,
-                        itemBuilder: (_, i) => _StepHistoryRow(
-                            step: steps[i]),
+                        itemBuilder: (_, i) => _StepHistoryRow(step: steps[i]),
                       ),
                     ),
                   ],
@@ -407,12 +421,16 @@ class _RunDetail extends StatelessWidget {
                     Expanded(
                       child: logLines.isEmpty
                           ? Center(
-                              child: Text('No log file found',
-                                  style: TextStyle(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
-                                      fontSize: 13)))
+                              child: Text(
+                                'No log file found',
+                                style: TextStyle(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            )
                           : LogViewer(
                               logs: logLines.map(LogLine.fromLogFile).toList(),
                               autoScroll: false,
@@ -431,6 +449,7 @@ class _RunDetail extends StatelessWidget {
 
 class _StepHistoryRow extends StatelessWidget {
   final StepRecord step;
+
   const _StepHistoryRow({required this.step});
 
   @override
@@ -464,18 +483,15 @@ class _StepHistoryRow extends StatelessWidget {
           Icon(icon, size: 14, color: color),
           const Gap(8),
           Expanded(
-            child: Text(
-              step.stepName,
-              style: const TextStyle(
-                  fontSize: 12),
-            ),
+            child: Text(step.stepName, style: const TextStyle(fontSize: 12)),
           ),
           if (step.durationSeconds != null)
             Text(
               step.durationSeconds! == 0 ? '< 1s' : '${step.durationSeconds}s',
               style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontSize: 11),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 11,
+              ),
             ),
         ],
       ),
@@ -492,13 +508,15 @@ class _EmptyHistory extends StatelessWidget {
         children: [
           Icon(Icons.history, size: 40, color: Color(0xFF30363D)),
           Gap(12),
-          Text('No runs yet',
-              style: TextStyle(
-                  color: Color(0xFF8B949E), fontSize: 14)),
+          Text(
+            'No runs yet',
+            style: TextStyle(color: Color(0xFF8B949E), fontSize: 14),
+          ),
           Gap(4),
-          Text('Start a pipeline from the Setup screen',
-              style: TextStyle(
-                  color: Color(0xFF8B949E), fontSize: 12)),
+          Text(
+            'Start a pipeline from the Setup screen',
+            style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+          ),
         ],
       ),
     );
@@ -516,9 +534,10 @@ class _EmptyDetail extends StatelessWidget {
         children: [
           Icon(Icons.touch_app, size: 40, color: Color(0xFF30363D)),
           Gap(12),
-          Text('Select a run to view details',
-              style: TextStyle(
-                  color: Color(0xFF8B949E), fontSize: 13)),
+          Text(
+            'Select a run to view details',
+            style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+          ),
         ],
       ),
     );
@@ -529,6 +548,7 @@ class _EmptyDetail extends StatelessWidget {
 
 class _DurationSparkline extends StatelessWidget {
   final List<RunRecord> runs;
+
   const _DurationSparkline({required this.runs});
 
   @override
@@ -552,13 +572,16 @@ class _DurationSparkline extends StatelessWidget {
 class _SparklinePainter extends CustomPainter {
   final List<RunRecord> runs;
   final Color lineColor;
+
   _SparklinePainter(this.runs, {required this.lineColor});
 
   @override
   void paint(Canvas canvas, Size size) {
     if (runs.length < 2) return;
 
-    final durations = runs.map((r) => (r.durationSeconds ?? 0).toDouble()).toList();
+    final durations = runs
+        .map((r) => (r.durationSeconds ?? 0).toDouble())
+        .toList();
     final maxD = durations.fold<double>(1.0, (m, d) => d > m ? d : m);
 
     final points = <Offset>[];
