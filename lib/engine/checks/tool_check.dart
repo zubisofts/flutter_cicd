@@ -99,8 +99,7 @@ class FastlaneCheck extends ToolCheck {
   @override
   String get name => 'Fastlane';
   @override
-  List<String> get checkCommand =>
-      ['bundle', 'exec', 'fastlane', '--version'];
+  List<String> get checkCommand => ['fastlane', '--version'];
   @override
   String? extractVersion(String output) =>
       RegExp(r'fastlane (\S+)').firstMatch(output)?.group(1);
