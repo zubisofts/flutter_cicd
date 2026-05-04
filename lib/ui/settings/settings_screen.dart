@@ -210,7 +210,8 @@ class _AndroidSigningCardState extends State<_AndroidSigningCard> {
   void didUpdateWidget(_AndroidSigningCard old) {
     super.didUpdateWidget(old);
     if (old.state.selectedEnv != widget.state.selectedEnv ||
-        old.state.projectId != widget.state.projectId) {
+        old.state.projectId != widget.state.projectId ||
+        (old.state.isLoading && !widget.state.isLoading)) {
       final s = widget.state;
       _pathCtrl.text = s.androidCreds.keystorePath;
       _aliasCtrl.text = s.androidCreds.keyAlias;
@@ -400,7 +401,8 @@ class _AppleCardState extends State<_AppleCard> {
   void didUpdateWidget(_AppleCard old) {
     super.didUpdateWidget(old);
     if (old.state.selectedEnv != widget.state.selectedEnv ||
-        old.state.projectId != widget.state.projectId) {
+        old.state.projectId != widget.state.projectId ||
+        (old.state.isLoading && !widget.state.isLoading)) {
       final s = widget.state;
       _keyIdCtrl.text = s.appleApiKey.keyId;
       _issuerIdCtrl.text = s.appleApiKey.issuerId;
@@ -566,7 +568,8 @@ class _FirebaseCardState extends State<_FirebaseCard> {
   void didUpdateWidget(_FirebaseCard old) {
     super.didUpdateWidget(old);
     if (old.state.selectedEnv != widget.state.selectedEnv ||
-        old.state.projectId != widget.state.projectId) {
+        old.state.projectId != widget.state.projectId ||
+        (old.state.isLoading && !widget.state.isLoading)) {
       _serviceAccountCtrl.text = widget.state.firebaseServiceAccountEmail;
       _playStoreCtrl.text = widget.state.playStoreKeyEmail;
       _groupsCtrl.text = widget.state.firebaseTesterGroups;
@@ -820,7 +823,8 @@ class _EnvConfigCardState extends State<_EnvConfigCard> {
   void didUpdateWidget(_EnvConfigCard old) {
     super.didUpdateWidget(old);
     if (old.state.selectedEnv != widget.state.selectedEnv ||
-        old.state.projectId != widget.state.projectId) {
+        old.state.projectId != widget.state.projectId ||
+        (old.state.isLoading && !widget.state.isLoading)) {
       final s = widget.state;
       _pkgCtrl.text = s.androidPackageName;
       _androidFbCtrl.text = s.androidFirebaseAppId;
@@ -889,7 +893,7 @@ class _EnvConfigCardState extends State<_EnvConfigCard> {
               (v) => bloc.add(EnvConfigFieldUpdated('ios_provisioning_profile', v))),
           const Gap(8),
           DropdownButtonFormField<String>(
-            initialValue: widget.state.iosExportMethod.isNotEmpty
+            value: widget.state.iosExportMethod.isNotEmpty
                 ? widget.state.iosExportMethod
                 : 'app-store',
             dropdownColor: Theme.of(context).colorScheme.surface,
@@ -1708,7 +1712,8 @@ class _MatchCardState extends State<_MatchCard> {
   @override
   void didUpdateWidget(_MatchCard old) {
     super.didUpdateWidget(old);
-    if (old.state.projectId != widget.state.projectId) {
+    if (old.state.projectId != widget.state.projectId ||
+        (old.state.isLoading && !widget.state.isLoading)) {
       final cfg = widget.state.matchConfig;
       _gitUrlCtrl.text = cfg.gitUrl;
       _branchCtrl.text = cfg.branch;
