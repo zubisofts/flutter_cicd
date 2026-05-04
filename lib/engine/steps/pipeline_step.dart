@@ -30,20 +30,16 @@ abstract class PipelineStep {
         return platforms.contains('ios');
       case 'firebase_android':
         return targets.contains('firebase_android') &&
-            platforms.contains('android') &&
-            (ctx.environment.distributionRules.firebase?.enabled ?? false);
+            platforms.contains('android');
       case 'firebase_ios':
         return targets.contains('firebase_ios') &&
-            platforms.contains('ios') &&
-            (ctx.environment.distributionRules.firebase?.enabled ?? false);
+            platforms.contains('ios');
       case 'testflight':
         return targets.contains('testflight') &&
-            platforms.contains('ios') &&
-            ctx.environment.distributionRules.testflight;
+            platforms.contains('ios');
       case 'playstore':
         return targets.contains('playstore') &&
-            platforms.contains('android') &&
-            (ctx.environment.distributionRules.playStore?.enabled ?? false);
+            platforms.contains('android');
       default:
         return true;
     }
