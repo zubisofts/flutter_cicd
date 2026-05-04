@@ -5,6 +5,7 @@ import 'package:gap/gap.dart';
 import '../../config/models/app_project.dart';
 import '../../di/injection.dart';
 import '../../config/config_repository.dart';
+import '../../engine/build_queue.dart';
 import '../dialogs/production_confirm_dialog.dart';
 import '../dialogs/new_project_dialog.dart';
 import 'setup_bloc.dart';
@@ -89,7 +90,8 @@ class _SetupScreenContent extends StatelessWidget {
   void _launchPipeline(BuildContext context) {
     final bloc = context.read<SetupBloc>();
     final request = bloc.buildRunRequest();
-    context.go('/run', extra: request);
+    getIt<BuildQueue>().submit(request);
+    context.go('/queue');
   }
 }
 

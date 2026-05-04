@@ -211,3 +211,4 @@ class AppTheme {
 
   static const fontMono = 'monospace';
 }
+

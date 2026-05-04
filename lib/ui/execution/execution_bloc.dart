@@ -5,6 +5,7 @@ import 'package:local_notifier/local_notifier.dart';
 import 'package:equatable/equatable.dart';
 import '../../engine/pipeline_runner.dart';
 import '../../engine/step_result.dart';
+import '../../engine/step_state.dart';
 import '../../execution/log_line.dart';
 import '../../config/models/pipeline_definition.dart';
 import '../../data/run_repository.dart';
@@ -13,6 +14,8 @@ import '../../services/google_chat_notification_service.dart';
 import '../../services/slack_notification_service.dart';
 import '../../services/teams_notification_service.dart';
 import '../../services/tray_service.dart';
+
+export '../../engine/step_state.dart' show PipelineStepState;
 
 // ─── Events ───────────────────────────────────────────────────────────────
 
@@ -69,39 +72,6 @@ class ExecutionReset extends ExecutionEvent {
 // ─── States ───────────────────────────────────────────────────────────────
 
 enum ExecutionPhase { idle, running, completed, aborted }
-
-class PipelineStepState extends Equatable {
-  final String stepId;
-  final String stepName;
-  final StepStatus status;
-  final Duration? duration;
-  final String? errorMessage;
-
-  const PipelineStepState({
-    required this.stepId,
-    required this.stepName,
-    required this.status,
-    this.duration,
-    this.errorMessage,
-  });
-
-  PipelineStepState copyWith({
-    StepStatus? status,
-    Duration? duration,
-    String? errorMessage,
-  }) =>
-      PipelineStepState(
-        stepId: stepId,
-        stepName: stepName,
-        status: status ?? this.status,
-        duration: duration ?? this.duration,
-        errorMessage: errorMessage ?? this.errorMessage,
-      );
-
-  @override
-  List<Object?> get props =>
-      [stepId, stepName, status, duration, errorMessage];
-}
 
 class ExecutionState extends Equatable {
   final ExecutionPhase phase;

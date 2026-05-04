@@ -50,21 +50,25 @@ class _SettingsContent extends StatelessWidget {
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, state) {
         return Scaffold(
-          body: state.isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _Header(state: state),
-                    const Divider(height: 1),
-                    if (state.savedMessage != null)
-                      _SavedBanner(state.savedMessage!),
-                    if (state.error != null)
-                      _ErrorBanner(state.error!),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(24),
-                        child: Row(
+          body: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _Header(state: state),
+              // Keep cards in the tree during env switches — show a slim
+              // progress bar instead of replacing content with a spinner.
+              if (state.isLoading)
+                const LinearProgressIndicator(minHeight: 2)
+              else
+                const Divider(height: 1),
+              if (state.savedMessage != null) _SavedBanner(state.savedMessage!),
+              if (state.error != null) _ErrorBanner(state.error!),
+              Expanded(
+                child: SingleChildScrollView(
+                  // Clamp overscroll to prevent the bounce animation from
+                  // triggering continuous layout rebuilds on macOS.
+                  physics: const ClampingScrollPhysics(),
+                  padding: const EdgeInsets.all(24),
+                  child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
@@ -195,7 +199,11 @@ class _AndroidSigningCardState extends State<_AndroidSigningCard> {
   @override
   void initState() {
     super.initState();
-    _initControllers(widget.state);
+    final s = widget.state;
+    _pathCtrl = TextEditingController(text: s.androidCreds.keystorePath);
+    _aliasCtrl = TextEditingController(text: s.androidCreds.keyAlias);
+    _ksPassCtrl = TextEditingController(text: s.androidCreds.keystorePassword);
+    _keyPassCtrl = TextEditingController(text: s.androidCreds.keyPassword);
   }
 
   @override
@@ -203,19 +211,12 @@ class _AndroidSigningCardState extends State<_AndroidSigningCard> {
     super.didUpdateWidget(old);
     if (old.state.selectedEnv != widget.state.selectedEnv ||
         old.state.projectId != widget.state.projectId) {
-      _initControllers(widget.state);
+      final s = widget.state;
+      _pathCtrl.text = s.androidCreds.keystorePath;
+      _aliasCtrl.text = s.androidCreds.keyAlias;
+      _ksPassCtrl.text = s.androidCreds.keystorePassword;
+      _keyPassCtrl.text = s.androidCreds.keyPassword;
     }
-  }
-
-  void _initControllers(SettingsState s) {
-    _pathCtrl =
-        TextEditingController(text: s.androidCreds.keystorePath);
-    _aliasCtrl =
-        TextEditingController(text: s.androidCreds.keyAlias);
-    _ksPassCtrl =
-        TextEditingController(text: s.androidCreds.keystorePassword);
-    _keyPassCtrl =
-        TextEditingController(text: s.androidCreds.keyPassword);
   }
 
   @override
@@ -389,7 +390,10 @@ class _AppleCardState extends State<_AppleCard> {
   @override
   void initState() {
     super.initState();
-    _initControllers(widget.state);
+    final s = widget.state;
+    _keyIdCtrl = TextEditingController(text: s.appleApiKey.keyId);
+    _issuerIdCtrl = TextEditingController(text: s.appleApiKey.issuerId);
+    _privateKeyCtrl = TextEditingController(text: s.appleApiKey.privateKeyContent);
   }
 
   @override
@@ -397,14 +401,11 @@ class _AppleCardState extends State<_AppleCard> {
     super.didUpdateWidget(old);
     if (old.state.selectedEnv != widget.state.selectedEnv ||
         old.state.projectId != widget.state.projectId) {
-      _initControllers(widget.state);
+      final s = widget.state;
+      _keyIdCtrl.text = s.appleApiKey.keyId;
+      _issuerIdCtrl.text = s.appleApiKey.issuerId;
+      _privateKeyCtrl.text = s.appleApiKey.privateKeyContent;
     }
-  }
-
-  void _initControllers(SettingsState s) {
-    _keyIdCtrl = TextEditingController(text: s.appleApiKey.keyId);
-    _issuerIdCtrl = TextEditingController(text: s.appleApiKey.issuerId);
-    _privateKeyCtrl = TextEditingController(text: s.appleApiKey.privateKeyContent);
   }
 
   @override
@@ -569,8 +570,10 @@ class _FirebaseCardState extends State<_FirebaseCard> {
       _serviceAccountCtrl.text = widget.state.firebaseServiceAccountEmail;
       _playStoreCtrl.text = widget.state.playStoreKeyEmail;
       _groupsCtrl.text = widget.state.firebaseTesterGroups;
-      _pendingFirebaseContent = null;
-      _pendingPlayStoreContent = null;
+      setState(() {
+        _pendingFirebaseContent = null;
+        _pendingPlayStoreContent = null;
+      });
     }
   }
 
@@ -803,20 +806,7 @@ class _EnvConfigCardState extends State<_EnvConfigCard> {
   @override
   void initState() {
     super.initState();
-    _init(widget.state);
-  }
-
-  @override
-  @override
-  void didUpdateWidget(_EnvConfigCard old) {
-    super.didUpdateWidget(old);
-    if (old.state.selectedEnv != widget.state.selectedEnv ||
-        old.state.projectId != widget.state.projectId) {
-      _init(widget.state);
-    }
-  }
-
-  void _init(SettingsState s) {
+    final s = widget.state;
     _pkgCtrl = TextEditingController(text: s.androidPackageName);
     _androidFbCtrl = TextEditingController(text: s.androidFirebaseAppId);
     _bundleCtrl = TextEditingController(text: s.iosBundleId);
@@ -824,6 +814,22 @@ class _EnvConfigCardState extends State<_EnvConfigCard> {
     _teamCtrl = TextEditingController(text: s.iosTeamId);
     _provisionCtrl = TextEditingController(text: s.iosProvisioningProfile);
     _dartDefineCtrl = TextEditingController(text: s.dartDefineFromFile);
+  }
+
+  @override
+  void didUpdateWidget(_EnvConfigCard old) {
+    super.didUpdateWidget(old);
+    if (old.state.selectedEnv != widget.state.selectedEnv ||
+        old.state.projectId != widget.state.projectId) {
+      final s = widget.state;
+      _pkgCtrl.text = s.androidPackageName;
+      _androidFbCtrl.text = s.androidFirebaseAppId;
+      _bundleCtrl.text = s.iosBundleId;
+      _iosFbCtrl.text = s.iosFirebaseAppId;
+      _teamCtrl.text = s.iosTeamId;
+      _provisionCtrl.text = s.iosProvisioningProfile;
+      _dartDefineCtrl.text = s.dartDefineFromFile;
+    }
   }
 
   @override
@@ -987,7 +993,7 @@ class _EmailNotificationCard extends StatefulWidget {
 class _EmailNotificationCardState extends State<_EmailNotificationCard> {
   late bool _enabled;
   late bool _useSsl;
-  late bool _showPass;
+  bool _showPass = false;
   late TextEditingController _hostCtrl;
   late TextEditingController _portCtrl;
   late TextEditingController _userCtrl;
@@ -997,8 +1003,14 @@ class _EmailNotificationCardState extends State<_EmailNotificationCard> {
   @override
   void initState() {
     super.initState();
-    _showPass = false;
-    _initFrom(widget.state.smtpConfig);
+    final cfg = widget.state.smtpConfig;
+    _enabled = cfg.enabled;
+    _useSsl = cfg.useSsl;
+    _hostCtrl = TextEditingController(text: cfg.host);
+    _portCtrl = TextEditingController(text: cfg.port.toString());
+    _userCtrl = TextEditingController(text: cfg.username);
+    _passCtrl = TextEditingController(text: cfg.password);
+    _recipientCtrl = TextEditingController(text: cfg.recipient);
   }
 
   @override
@@ -1009,18 +1021,16 @@ class _EmailNotificationCardState extends State<_EmailNotificationCard> {
     if (cfg.host != oldCfg.host ||
         cfg.recipient != oldCfg.recipient ||
         cfg.enabled != oldCfg.enabled) {
-      _initFrom(cfg);
+      setState(() {
+        _enabled = cfg.enabled;
+        _useSsl = cfg.useSsl;
+      });
+      _hostCtrl.text = cfg.host;
+      _portCtrl.text = cfg.port.toString();
+      _userCtrl.text = cfg.username;
+      _passCtrl.text = cfg.password;
+      _recipientCtrl.text = cfg.recipient;
     }
-  }
-
-  void _initFrom(SmtpConfig cfg) {
-    _enabled = cfg.enabled;
-    _useSsl = cfg.useSsl;
-    _hostCtrl = TextEditingController(text: cfg.host);
-    _portCtrl = TextEditingController(text: cfg.port.toString());
-    _userCtrl = TextEditingController(text: cfg.username);
-    _passCtrl = TextEditingController(text: cfg.password);
-    _recipientCtrl = TextEditingController(text: cfg.recipient);
   }
 
   @override
@@ -1248,14 +1258,15 @@ class _SlackNotificationCard extends StatefulWidget {
 
 class _SlackNotificationCardState extends State<_SlackNotificationCard> {
   late bool _enabled;
-  late bool _showUrl;
+  bool _showUrl = false;
   late TextEditingController _urlCtrl;
 
   @override
   void initState() {
     super.initState();
-    _showUrl = false;
-    _initFrom(widget.state.slackConfig);
+    final cfg = widget.state.slackConfig;
+    _enabled = cfg.enabled;
+    _urlCtrl = TextEditingController(text: cfg.webhookUrl);
   }
 
   @override
@@ -1263,15 +1274,10 @@ class _SlackNotificationCardState extends State<_SlackNotificationCard> {
     super.didUpdateWidget(old);
     final cfg = widget.state.slackConfig;
     final oldCfg = old.state.slackConfig;
-    if (cfg.webhookUrl != oldCfg.webhookUrl ||
-        cfg.enabled != oldCfg.enabled) {
-      _initFrom(cfg);
+    if (cfg.webhookUrl != oldCfg.webhookUrl || cfg.enabled != oldCfg.enabled) {
+      setState(() => _enabled = cfg.enabled);
+      _urlCtrl.text = cfg.webhookUrl;
     }
-  }
-
-  void _initFrom(SlackConfig cfg) {
-    _enabled = cfg.enabled;
-    _urlCtrl = TextEditingController(text: cfg.webhookUrl);
   }
 
   @override
@@ -1400,14 +1406,15 @@ class _TeamsNotificationCard extends StatefulWidget {
 
 class _TeamsNotificationCardState extends State<_TeamsNotificationCard> {
   late bool _enabled;
-  late bool _showUrl;
+  bool _showUrl = false;
   late TextEditingController _urlCtrl;
 
   @override
   void initState() {
     super.initState();
-    _showUrl = false;
-    _initFrom(widget.state.teamsConfig);
+    final cfg = widget.state.teamsConfig;
+    _enabled = cfg.enabled;
+    _urlCtrl = TextEditingController(text: cfg.webhookUrl);
   }
 
   @override
@@ -1416,13 +1423,9 @@ class _TeamsNotificationCardState extends State<_TeamsNotificationCard> {
     final cfg = widget.state.teamsConfig;
     final oldCfg = old.state.teamsConfig;
     if (cfg.webhookUrl != oldCfg.webhookUrl || cfg.enabled != oldCfg.enabled) {
-      _initFrom(cfg);
+      setState(() => _enabled = cfg.enabled);
+      _urlCtrl.text = cfg.webhookUrl;
     }
-  }
-
-  void _initFrom(TeamsConfig cfg) {
-    _enabled = cfg.enabled;
-    _urlCtrl = TextEditingController(text: cfg.webhookUrl);
   }
 
   @override
@@ -1545,14 +1548,15 @@ class _GoogleChatNotificationCard extends StatefulWidget {
 class _GoogleChatNotificationCardState
     extends State<_GoogleChatNotificationCard> {
   late bool _enabled;
-  late bool _showUrl;
+  bool _showUrl = false;
   late TextEditingController _urlCtrl;
 
   @override
   void initState() {
     super.initState();
-    _showUrl = false;
-    _initFrom(widget.state.googleChatConfig);
+    final cfg = widget.state.googleChatConfig;
+    _enabled = cfg.enabled;
+    _urlCtrl = TextEditingController(text: cfg.webhookUrl);
   }
 
   @override
@@ -1561,13 +1565,9 @@ class _GoogleChatNotificationCardState
     final cfg = widget.state.googleChatConfig;
     final oldCfg = old.state.googleChatConfig;
     if (cfg.webhookUrl != oldCfg.webhookUrl || cfg.enabled != oldCfg.enabled) {
-      _initFrom(cfg);
+      setState(() => _enabled = cfg.enabled);
+      _urlCtrl.text = cfg.webhookUrl;
     }
-  }
-
-  void _initFrom(GoogleChatConfig cfg) {
-    _enabled = cfg.enabled;
-    _urlCtrl = TextEditingController(text: cfg.webhookUrl);
   }
 
   @override
@@ -1698,22 +1698,23 @@ class _MatchCardState extends State<_MatchCard> {
   @override
   void initState() {
     super.initState();
-    _initFrom(widget.state.matchConfig);
+    final cfg = widget.state.matchConfig;
+    _gitUrlCtrl = TextEditingController(text: cfg.gitUrl);
+    _branchCtrl = TextEditingController(text: cfg.branch);
+    _passwordCtrl = TextEditingController(text: cfg.password);
+    _readonly = cfg.readonly;
   }
 
   @override
   void didUpdateWidget(_MatchCard old) {
     super.didUpdateWidget(old);
     if (old.state.projectId != widget.state.projectId) {
-      _initFrom(widget.state.matchConfig);
+      final cfg = widget.state.matchConfig;
+      _gitUrlCtrl.text = cfg.gitUrl;
+      _branchCtrl.text = cfg.branch;
+      _passwordCtrl.text = cfg.password;
+      setState(() => _readonly = cfg.readonly);
     }
-  }
-
-  void _initFrom(MatchConfig cfg) {
-    _gitUrlCtrl = TextEditingController(text: cfg.gitUrl);
-    _branchCtrl = TextEditingController(text: cfg.branch);
-    _passwordCtrl = TextEditingController(text: cfg.password);
-    _readonly = cfg.readonly;
   }
 
   @override

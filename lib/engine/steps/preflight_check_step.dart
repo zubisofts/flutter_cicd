@@ -13,16 +13,19 @@ class PreflightCheckStep extends PipelineStep {
     final platforms = ctx.options.platforms;
     final targets = ctx.options.targets;
 
+    final needsFastlane = platforms.contains('ios') ||
+        targets.contains('testflight') ||
+        targets.contains('playstore');
+    final needsFirebase = targets.any((t) => t.contains('firebase'));
+
     final checks = <ToolCheck>[
       FlutterCheck(),
       GitCheck(),
       if (platforms.contains('ios')) XcodeCheck(platforms),
       if (platforms.contains('ios')) CocoaPodsCheck(),
       if (platforms.contains('android')) JavaCheck(),
-      if (targets.contains('testflight') ||
-          targets.contains('playstore'))
-        FastlaneCheck(),
-      if (targets.contains('firebase')) FirebaseCliCheck(),
+      if (needsFastlane) FastlaneCheck(),
+      if (needsFirebase) FirebaseCliCheck(),
     ];
 
     final results = <CheckResult>[];
