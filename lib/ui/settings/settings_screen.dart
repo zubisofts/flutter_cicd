@@ -1690,6 +1690,7 @@ class _MatchCard extends StatefulWidget {
 
 class _MatchCardState extends State<_MatchCard> {
   late TextEditingController _gitUrlCtrl;
+  late TextEditingController _branchCtrl;
   late TextEditingController _passwordCtrl;
   late bool _readonly;
   bool _showPassword = false;
@@ -1710,6 +1711,7 @@ class _MatchCardState extends State<_MatchCard> {
 
   void _initFrom(MatchConfig cfg) {
     _gitUrlCtrl = TextEditingController(text: cfg.gitUrl);
+    _branchCtrl = TextEditingController(text: cfg.branch);
     _passwordCtrl = TextEditingController(text: cfg.password);
     _readonly = cfg.readonly;
   }
@@ -1717,6 +1719,7 @@ class _MatchCardState extends State<_MatchCard> {
   @override
   void dispose() {
     _gitUrlCtrl.dispose();
+    _branchCtrl.dispose();
     _passwordCtrl.dispose();
     super.dispose();
   }
@@ -1763,6 +1766,17 @@ class _MatchCardState extends State<_MatchCard> {
               hintText: 'git@github.com:org/certificates.git',
               prefixIcon:
                   Icon(Icons.source, size: 16, color: Color(0xFF8B949E)),
+            ),
+          ),
+          const Gap(10),
+          TextField(
+            controller: _branchCtrl,
+            style: const TextStyle(fontSize: 13),
+            decoration: const InputDecoration(
+              labelText: 'Branch',
+              hintText: 'main',
+              prefixIcon:
+                  Icon(Icons.alt_route, size: 16, color: Color(0xFF8B949E)),
             ),
           ),
           const Gap(10),
@@ -1814,6 +1828,9 @@ class _MatchCardState extends State<_MatchCard> {
               onPressed: () {
                 bloc.add(MatchConfigSaved(
                   gitUrl: _gitUrlCtrl.text.trim(),
+                  branch: _branchCtrl.text.trim().isEmpty
+                      ? 'main'
+                      : _branchCtrl.text.trim(),
                   password: _passwordCtrl.text,
                   readonly: _readonly,
                 ));

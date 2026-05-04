@@ -179,6 +179,9 @@ class EnvironmentResolver {
       'MATCH_GIT_URL': matchConfig.gitUrl.isNotEmpty
           ? matchConfig.gitUrl
           : sysEnv['MATCH_GIT_URL'] ?? '',
+      'MATCH_GIT_BRANCH': matchConfig.branch.isNotEmpty
+          ? matchConfig.branch
+          : sysEnv['MATCH_GIT_BRANCH'] ?? 'main',
       'MATCH_PASSWORD': matchConfig.password.isNotEmpty
           ? matchConfig.password
           : sysEnv['MATCH_PASSWORD'] ?? '',
