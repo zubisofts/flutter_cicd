@@ -44,6 +44,7 @@ class EnvironmentResolver {
     // The pipeline runner deletes the temp dir when the run finishes.
     final firebaseContent = await _credentials.loadFirebaseServiceAccount();
     final playStoreContent = await _credentials.loadPlayStoreKey();
+    final matchConfig = await _credentials.loadMatchConfig(projectId);
 
     final firebaseCredPath = await _writeTempCredential(
       runId: runId,
@@ -72,6 +73,7 @@ class EnvironmentResolver {
       appleApiKey: appleApiKey,
       firebaseCredPath: firebaseCredPath,
       playStoreCredPath: playStoreCredPath,
+      matchConfig: matchConfig,
     );
 
     return ResolvedEnvironment(
@@ -133,8 +135,16 @@ class EnvironmentResolver {
     required AppleApiKey appleApiKey,
     required String firebaseCredPath,
     required String playStoreCredPath,
+    required MatchConfig matchConfig,
   }) {
     final sysEnv = Platform.environment;
+    // Derive Match type from the iOS export method (e.g. "app-store" → "appstore")
+    final matchType = switch (envConfig.ios.exportMethod) {
+      'ad-hoc' => 'adhoc',
+      'enterprise' => 'enterprise',
+      'development' => 'development',
+      _ => 'appstore',
+    };
     return {
       // Android signing — Keychain values take priority
       'KEYSTORE_PASSWORD': androidCreds.keystorePassword.isNotEmpty
@@ -164,6 +174,16 @@ class EnvironmentResolver {
       'PLAY_STORE_JSON_KEY': playStoreCredPath.isNotEmpty
           ? playStoreCredPath
           : sysEnv['PLAY_STORE_JSON_KEY'] ?? '',
+
+      // Fastlane Match — certificate & profile sync
+      'MATCH_GIT_URL': matchConfig.gitUrl.isNotEmpty
+          ? matchConfig.gitUrl
+          : sysEnv['MATCH_GIT_URL'] ?? '',
+      'MATCH_PASSWORD': matchConfig.password.isNotEmpty
+          ? matchConfig.password
+          : sysEnv['MATCH_PASSWORD'] ?? '',
+      'MATCH_TYPE': matchType,
+      'MATCH_READONLY': matchConfig.readonly ? 'true' : 'false',
     };
   }
 

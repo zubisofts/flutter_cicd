@@ -101,6 +101,8 @@ class ConfigRepository {
   }
 
   bool _pipelineNeedsMigration(PipelineDefinition def) {
+    // Migrate if the sync_certs step is missing (added in Match integration)
+    if (!def.steps.any((s) => s.id == 'sync_certs')) return true;
     final distAndroid = def.steps
         .where((s) => s.id == 'distribute_firebase_android')
         .firstOrNull;
@@ -347,11 +349,19 @@ steps:
       artifact: appbundle
     abort_on_failure: true
 
+  - id: sync_certs
+    type: fastlane_lane
+    name: "Sync iOS Certificates"
+    condition: "ios"
+    depends_on: [install_deps]
+    params:
+      lane: sync_certificates
+
   - id: build_ios
     type: flutter_build
     name: "Build iOS"
     condition: "ios"
-    depends_on: [run_tests]
+    depends_on: [run_tests, sync_certs]
     params:
       platform: ios
       artifact: ipa
