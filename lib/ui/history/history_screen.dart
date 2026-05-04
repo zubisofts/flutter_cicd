@@ -1,8 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
 import '../../data/database.dart';
 import '../../data/run_repository.dart';
 import '../../di/injection.dart';
@@ -12,6 +15,27 @@ import '../execution/widgets/log_viewer.dart';
 import '../shell/app_theme.dart';
 import '../../execution/log_line.dart';
 import 'history_bloc.dart';
+
+Future<Map<String, String>> _loadRunArtifacts(String runId) async {
+  final base = Platform.environment['HOME'] ?? '/tmp';
+  final dir = Directory(p.join(base, '.cicd', 'artifacts', runId));
+  if (!await dir.exists()) return {};
+  final result = <String, String>{};
+  await for (final entity in dir.list()) {
+    if (entity is File) {
+      final name = p.basename(entity.path);
+      final ext = p.extension(name).toLowerCase();
+      final label = switch (ext) {
+        '.apk' => 'Android APK',
+        '.aab' => 'Android AAB',
+        '.ipa' => 'iOS IPA',
+        _ => name,
+      };
+      result[label] = entity.path;
+    }
+  }
+  return result;
+}
 
 RunRequest _runRequestFrom(RunRecord run, {Set<String> skipStepIds = const {}}) =>
     RunRequest(
@@ -428,6 +452,15 @@ class _RunDetail extends StatelessWidget {
           ),
         ),
         const Divider(height: 1),
+        // Artifacts (if any were saved for this run)
+        FutureBuilder<Map<String, String>>(
+          future: _loadRunArtifacts(run.id),
+          builder: (context, snapshot) {
+            final artifacts = snapshot.data;
+            if (artifacts == null || artifacts.isEmpty) return const SizedBox.shrink();
+            return _HistoryArtifactBanner(artifacts: artifacts);
+          },
+        ),
         // Steps + Logs
         Expanded(
           child: Row(
@@ -669,4 +702,106 @@ class _SparklinePainter extends CustomPainter {
       old.runs.length != runs.length ||
       old.lineColor != lineColor ||
       (runs.isNotEmpty && old.runs.last.id != runs.last.id);
+}
+
+// ─── History Artifact Banner ──────────────────────────────────────────────
+
+class _HistoryArtifactBanner extends StatelessWidget {
+  final Map<String, String> artifacts;
+
+  const _HistoryArtifactBanner({required this.artifacts});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 20),
+      color: AppTheme.colorSuccess.withValues(alpha: 0.08),
+      child: Wrap(
+        spacing: 16,
+        runSpacing: 6,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.inventory_2_outlined,
+                  size: 13, color: AppTheme.colorSuccess),
+              const Gap(6),
+              Text(
+                'ARTIFACTS',
+                style: TextStyle(
+                  color: AppTheme.colorSuccess.withValues(alpha: 0.8),
+                  fontSize: 10,
+                  letterSpacing: 1.0,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          for (final entry in artifacts.entries)
+            _HistoryArtifactRow(label: entry.key, path: entry.value),
+        ],
+      ),
+    );
+  }
+}
+
+class _HistoryArtifactRow extends StatelessWidget {
+  final String label;
+  final String path;
+
+  const _HistoryArtifactRow({required this.label, required this.path});
+
+  @override
+  Widget build(BuildContext context) {
+    final exists = File(path).existsSync();
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.folder_open,
+            size: 13, color: exists ? const Color(0xFF8B949E) : AppTheme.colorError),
+        const Gap(4),
+        Text(
+          label,
+          style: TextStyle(
+              color: exists ? const Color(0xFF8B949E) : AppTheme.colorError,
+              fontSize: 11),
+        ),
+        if (exists) ...[
+          const Gap(8),
+          TextButton.icon(
+            onPressed: () => Process.run('open', ['-R', path]).ignore(),
+            icon: const Icon(Icons.open_in_new, size: 11),
+            label: const Text('Show in Finder'),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF58A6FF),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              textStyle: const TextStyle(fontSize: 11),
+            ),
+          ),
+          TextButton.icon(
+            onPressed: () =>
+                Clipboard.setData(ClipboardData(text: path)).ignore(),
+            icon: const Icon(Icons.copy, size: 11),
+            label: const Text('Copy Path'),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF8B949E),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              textStyle: const TextStyle(fontSize: 11),
+            ),
+          ),
+        ] else
+          Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: Text(
+              'file deleted',
+              style: TextStyle(
+                  color: AppTheme.colorError.withValues(alpha: 0.7),
+                  fontSize: 11),
+            ),
+          ),
+      ],
+    );
+  }
 }
