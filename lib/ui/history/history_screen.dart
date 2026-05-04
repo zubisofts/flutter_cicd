@@ -43,8 +43,18 @@ class HistoryScreen extends StatelessWidget {
   }
 }
 
-class _HistoryContent extends StatelessWidget {
+class _HistoryContent extends StatefulWidget {
   const _HistoryContent();
+
+  @override
+  State<_HistoryContent> createState() => _HistoryContentState();
+}
+
+class _HistoryContentState extends State<_HistoryContent> {
+  bool _showDetail = false;
+
+  static const _breakpoint = 700.0;
+  static const _listWidth = 340.0;
 
   @override
   Widget build(BuildContext context) {
@@ -65,78 +75,132 @@ class _HistoryContent extends StatelessWidget {
         }
       },
       builder: (context, state) {
+        Widget listPanel = _ListPanel(state: state);
+        Widget detailPanel = state.selectedRun != null
+            ? _RunDetail(
+                run: state.selectedRun!,
+                steps: state.selectedSteps,
+                logLines: state.logLines,
+              )
+            : const _EmptyDetail();
+
         return Scaffold(
-          body: Row(
-            children: [
-              // Run list
-              SizedBox(
-                width: 340,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          body: LayoutBuilder(
+            builder: (context, constraints) {
+              final isWide = constraints.maxWidth >= _breakpoint;
+
+              if (isWide) {
+                return Row(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Run History',
-                            style: TextStyle(
-                                                            fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          if (state.runs.isNotEmpty) ...[
-                            const Gap(8),
-                            Row(children: [
-                              _StatChip(
-                                  label: '${state.runs.length} runs',
-                                  color: const Color(0xFF58A6FF)),
-                              const Gap(6),
-                              _StatChip(
-                                  label: '${state.successCount} passed',
-                                  color: AppTheme.colorSuccess),
-                              const Gap(6),
-                              _StatChip(
-                                  label: state.successRate,
-                                  color: const Color(0xFF8B949E)),
-                            ]),
-                            const Gap(10),
-                            _DurationSparkline(runs: state.runs),
-                          ],
-                        ],
-                      ),
+                    SizedBox(width: _listWidth, child: listPanel),
+                    const VerticalDivider(width: 1),
+                    Expanded(child: detailPanel),
+                  ],
+                );
+              }
+
+              // Narrow: master-detail navigation
+              if (_showDetail && state.selectedRun != null) {
+                return Column(
+                  children: [
+                    _NarrowBackBar(
+                      onBack: () => setState(() => _showDetail = false),
                     ),
                     const Divider(height: 1),
-                    Expanded(
-                      child: state.isLoading
-                          ? const Center(
-                              child: CircularProgressIndicator())
-                          : state.runs.isEmpty
-                              ? _EmptyHistory()
-                              : _RunList(
-                                  runs: state.runs,
-                                  selectedId: state.selectedRun?.id,
-                                ),
-                    ),
+                    Expanded(child: detailPanel),
                   ],
-                ),
-              ),
-              const VerticalDivider(width: 1),
-              // Detail panel
-              Expanded(
-                child: state.selectedRun != null
-                    ? _RunDetail(
-                        run: state.selectedRun!,
-                        steps: state.selectedSteps,
-                        logLines: state.logLines,
-                      )
-                    : const _EmptyDetail(),
-              ),
-            ],
+                );
+              }
+
+              return _ListPanel(
+                state: state,
+                onRunTap: () => setState(() => _showDetail = true),
+              );
+            },
           ),
         );
       },
+    );
+  }
+}
+
+class _NarrowBackBar extends StatelessWidget {
+  final VoidCallback onBack;
+  const _NarrowBackBar({required this.onBack});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back, size: 18),
+            onPressed: onBack,
+            tooltip: 'Back to list',
+          ),
+          const Text('Run detail',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ListPanel extends StatelessWidget {
+  final HistoryState state;
+  final VoidCallback? onRunTap;
+
+  const _ListPanel({required this.state, this.onRunTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Run History',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+              if (state.runs.isNotEmpty) ...[
+                const Gap(8),
+                Row(children: [
+                  _StatChip(
+                      label: '${state.runs.length} runs',
+                      color: const Color(0xFF58A6FF)),
+                  const Gap(6),
+                  _StatChip(
+                      label: '${state.successCount} passed',
+                      color: AppTheme.colorSuccess),
+                  const Gap(6),
+                  _StatChip(
+                      label: state.successRate,
+                      color: const Color(0xFF8B949E)),
+                ]),
+                const Gap(10),
+                _DurationSparkline(runs: state.runs),
+              ],
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: state.isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : state.runs.isEmpty
+                  ? _EmptyHistory()
+                  : _RunList(
+                      runs: state.runs,
+                      selectedId: state.selectedRun?.id,
+                      onTap: onRunTap,
+                    ),
+        ),
+      ],
     );
   }
 }
@@ -164,8 +228,9 @@ class _StatChip extends StatelessWidget {
 class _RunList extends StatelessWidget {
   final List<RunRecord> runs;
   final String? selectedId;
+  final VoidCallback? onTap;
 
-  const _RunList({required this.runs, this.selectedId});
+  const _RunList({required this.runs, this.selectedId, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -177,9 +242,10 @@ class _RunList extends StatelessWidget {
         return _RunTile(
           run: run,
           isSelected: run.id == selectedId,
-          onTap: () => context
-              .read<HistoryBloc>()
-              .add(HistoryRunSelected(run.id)),
+          onTap: () {
+            context.read<HistoryBloc>().add(HistoryRunSelected(run.id));
+            onTap?.call();
+          },
         );
       },
     );
@@ -284,31 +350,47 @@ class _RunDetail extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Header
-        Container(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 14),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    run.success ? Icons.check_circle : Icons.cancel,
-                    size: 18,
-                    color: run.success
-                        ? AppTheme.colorSuccess
-                        : AppTheme.colorError,
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Icon(
+                      run.success ? Icons.check_circle : Icons.cancel,
+                      size: 18,
+                      color: run.success
+                          ? AppTheme.colorSuccess
+                          : AppTheme.colorError,
+                    ),
                   ),
                   const Gap(8),
                   Expanded(
                     child: Text(
                       '${run.projectName} › ${run.envName} › ${run.versionLabel}',
                       style: const TextStyle(
-                                                fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
-                  const Gap(8),
+                ],
+              ),
+              const Gap(6),
+              Text(
+                'Run ID: ${run.id}  •  Branch: ${run.branch}  •  '
+                'Platforms: ${run.platforms}  •  Targets: ${run.targets}',
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 12),
+              ),
+              const Gap(10),
+              Row(
+                children: [
                   OutlinedButton.icon(
                     onPressed: () => context
                         .read<HistoryBloc>()
@@ -341,14 +423,6 @@ class _RunDetail extends StatelessWidget {
                     ),
                   ],
                 ],
-              ),
-              const Gap(6),
-              Text(
-                'Run ID: ${run.id}  •  Branch: ${run.branch}  •  '
-                'Platforms: ${run.platforms}  •  Targets: ${run.targets}',
-                style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontSize: 12),
               ),
             ],
           ),

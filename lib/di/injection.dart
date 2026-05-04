@@ -3,6 +3,7 @@ import '../config/config_repository.dart';
 import '../config/environment_resolver.dart';
 import '../data/database.dart';
 import '../data/run_repository.dart';
+import '../engine/build_queue.dart';
 import '../engine/pipeline_runner.dart';
 import '../engine/step_registry.dart';
 import '../services/credential_store.dart';
@@ -52,6 +53,12 @@ void setupDependencies({required ThemeService themeService}) {
       configRepo: getIt<ConfigRepository>(),
       envResolver: getIt<EnvironmentResolver>(),
       registry: getIt<StepRegistry>(),
+    ),
+  );
+  getIt.registerLazySingleton<BuildQueue>(
+    () => BuildQueue(
+      configRepo: getIt<ConfigRepository>(),
+      envResolver: getIt<EnvironmentResolver>(),
     ),
   );
 

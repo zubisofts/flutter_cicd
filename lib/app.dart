@@ -6,10 +6,27 @@ import 'services/theme_service.dart';
 import 'ui/execution/execution_bloc.dart';
 import 'ui/execution/execution_screen.dart';
 import 'ui/history/history_screen.dart';
+import 'ui/queue/queue_screen.dart';
 import 'ui/settings/settings_screen.dart';
 import 'ui/setup/setup_screen.dart';
 import 'ui/shell/app_shell.dart';
 import 'ui/shell/app_theme.dart';
+
+// 100ms ease-in fade — feels near-instant but removes the hard visual cut
+// when switching between screens with very different layouts.
+const _kTransitionDuration = Duration(milliseconds: 100);
+
+CustomTransitionPage<void> _fadePage(GoRouterState state, Widget child) =>
+    CustomTransitionPage<void>(
+      key: state.pageKey,
+      child: child,
+      transitionDuration: _kTransitionDuration,
+      reverseTransitionDuration: _kTransitionDuration,
+      transitionsBuilder: (context, animation, _, child) => FadeTransition(
+        opacity: CurvedAnimation(parent: animation, curve: Curves.easeIn),
+        child: child,
+      ),
+    );
 
 final _router = GoRouter(
   initialLocation: '/setup',
@@ -22,35 +39,43 @@ final _router = GoRouter(
       routes: [
         GoRoute(
           path: '/setup',
-          builder: (context, state) => const SetupScreen(),
+          pageBuilder: (context, state) => _fadePage(state, const SetupScreen()),
         ),
         GoRoute(
           path: '/run',
-          builder: (context, state) {
+          pageBuilder: (context, state) {
             final newRequest = state.extra as RunRequest?;
             if (newRequest != null) {
-              // Fresh run triggered from SetupScreen
-              return ExecutionScreen(request: newRequest, startRun: true);
+              return _fadePage(
+                  state, ExecutionScreen(request: newRequest, startRun: true));
             }
-            // Re-attach: nav item clicked while a run is active/completed
             final activeRequest = getIt<ExecutionBloc>().currentRequest;
             if (activeRequest != null) {
-              return ExecutionScreen(request: activeRequest, startRun: false);
+              return _fadePage(state,
+                  ExecutionScreen(request: activeRequest, startRun: false));
             }
-            return const SetupScreen();
+            return _fadePage(state, const SetupScreen());
           },
         ),
         GoRoute(
+          path: '/queue',
+          pageBuilder: (context, state) => _fadePage(state, const QueueScreen()),
+        ),
+        GoRoute(
           path: '/history',
-          builder: (context, state) => const HistoryScreen(),
+          pageBuilder: (context, state) =>
+              _fadePage(state, const HistoryScreen()),
         ),
         GoRoute(
           path: '/settings',
-          builder: (context, state) {
+          pageBuilder: (context, state) {
             final extra = state.extra as Map<String, String>?;
-            return SettingsScreen(
-              projectId: extra?['projectId'] ?? '',
-              initialEnv: extra?['env'] ?? 'dev',
+            return _fadePage(
+              state,
+              SettingsScreen(
+                projectId: extra?['projectId'] ?? '',
+                initialEnv: extra?['env'] ?? 'dev',
+              ),
             );
           },
         ),

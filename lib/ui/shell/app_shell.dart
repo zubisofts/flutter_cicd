@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../di/injection.dart';
+import '../../engine/build_queue.dart';
 import '../../services/theme_service.dart';
-import '../../ui/execution/execution_bloc.dart';
 import 'app_theme.dart';
 
 class AppShell extends StatelessWidget {
@@ -73,16 +72,19 @@ class _SideNav extends StatelessWidget {
             route: '/setup',
             currentPath: currentPath,
           ),
-          BlocBuilder<ExecutionBloc, ExecutionState>(
-            bloc: getIt<ExecutionBloc>(),
-            buildWhen: (prev, curr) => prev.phase != curr.phase,
-            builder: (context, state) => _NavItem(
-              icon: Icons.terminal,
-              label: 'Execution',
-              route: '/run',
-              currentPath: currentPath,
-              badge: state.phase == ExecutionPhase.running,
-            ),
+          StreamBuilder<List<ActiveBuild>>(
+            stream: getIt<BuildQueue>().stream,
+            initialData: getIt<BuildQueue>().builds,
+            builder: (context, snapshot) {
+              final liveCount = getIt<BuildQueue>().liveCount;
+              return _NavItem(
+                icon: Icons.view_list,
+                label: 'Build Queue',
+                route: '/queue',
+                currentPath: currentPath,
+                badgeCount: liveCount,
+              );
+            },
           ),
           const SizedBox(height: 8),
           _NavSection(label: 'RECORDS'),
@@ -222,14 +224,14 @@ class _NavItem extends StatelessWidget {
   final String label;
   final String route;
   final String currentPath;
-  final bool badge;
+  final int badgeCount;
 
   const _NavItem({
     required this.icon,
     required this.label,
     required this.route,
     required this.currentPath,
-    this.badge = false,
+    this.badgeCount = 0,
   });
 
   bool get isActive => currentPath.startsWith(route);
@@ -267,15 +269,23 @@ class _NavItem extends StatelessWidget {
                 ),
               ),
             ),
-            if (badge)
+            if (badgeCount > 0)
               Container(
-                width: 7,
-                height: 7,
-                decoration: const BoxDecoration(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
                   color: AppTheme.colorRunning,
-                  shape: BoxShape.circle,
+                  borderRadius: BorderRadius.circular(8),
                 ),
-              ),
+                child: Text(
+                  '$badgeCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              )
           ],
         ),
       ),
