@@ -70,26 +70,26 @@ class ActiveBuild {
   }
 
   void _onStep(StepUpdate update) {
+    final idx = steps.indexWhere((s) => s.stepId == update.stepId);
+    // Ignore steps that weren't pre-populated — they are skipped steps whose
+    // condition didn't match the request (e.g. iOS steps in an Android-only
+    // run). Showing them would flood the list with underscored step IDs.
+    if (idx < 0) return;
+
     if (update.status == StepStatus.running) {
       currentStepId = update.stepId;
-    } else if (currentStepId == update.stepId && update.status != StepStatus.running) {
+    } else if (currentStepId == update.stepId &&
+        update.status != StepStatus.running) {
       currentStepId = null;
     }
-    final idx = steps.indexWhere((s) => s.stepId == update.stepId);
-    // Preserve the display name from the pre-populated entry when available.
-    final existingName = idx >= 0 ? steps[idx].stepName : update.stepId;
-    final next = PipelineStepState(
+
+    steps[idx] = PipelineStepState(
       stepId: update.stepId,
-      stepName: existingName,
+      stepName: steps[idx].stepName, // always preserve the display name
       status: update.status,
       duration: update.duration,
       errorMessage: update.errorMessage,
     );
-    if (idx >= 0) {
-      steps[idx] = next;
-    } else {
-      steps.add(next);
-    }
     _notifyChange();
   }
 
