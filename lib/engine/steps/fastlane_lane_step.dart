@@ -131,6 +131,18 @@ lane :upload_testflight do
   )
 end
 
+desc "Sync certificates and profiles via Fastlane Match"
+lane :sync_certificates do
+  match(
+    type:           ENV["MATCH_TYPE"],
+    git_url:        ENV["MATCH_GIT_URL"],
+    password:       ENV["MATCH_PASSWORD"],
+    app_identifier: ENV["MATCH_APP_IDENTIFIER"],
+    readonly:       ENV.fetch("MATCH_READONLY", "true") == "true",
+    verbose:        false,
+  )
+end
+
 desc "Upload AAB to Play Store"
 lane :upload_playstore do
   notes        = ENV.fetch("RELEASE_NOTES", "")

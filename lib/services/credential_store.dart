@@ -238,6 +238,42 @@ class CredentialStore {
     );
   }
 
+  // ── Fastlane Match ────────────────────────────────────────────────────────
+  // Match config is project-scoped (same certs repo for all envs).
+
+  static String _matchKey(String projectId, String field) =>
+      'cicd.$projectId.match.$field';
+
+  Future<void> saveMatchConfig({
+    required String projectId,
+    required String gitUrl,
+    required String password,
+    required bool readonly,
+  }) async {
+    await Future.wait([
+      _storage.write(
+          key: _matchKey(projectId, 'git_url'), value: gitUrl),
+      _storage.write(
+          key: _matchKey(projectId, 'password'), value: password),
+      _storage.write(
+          key: _matchKey(projectId, 'readonly'),
+          value: readonly.toString()),
+    ]);
+  }
+
+  Future<MatchConfig> loadMatchConfig(String projectId) async {
+    final values = await Future.wait([
+      _storage.read(key: _matchKey(projectId, 'git_url')),
+      _storage.read(key: _matchKey(projectId, 'password')),
+      _storage.read(key: _matchKey(projectId, 'readonly')),
+    ]);
+    return MatchConfig(
+      gitUrl: values[0] ?? '',
+      password: values[1] ?? '',
+      readonly: values[2] != 'false', // defaults to true
+    );
+  }
+
   Future<void> clearProject(String projectId) async {
     final all = await _storage.readAll();
     for (final key in all.keys) {
@@ -318,6 +354,20 @@ class TeamsConfig {
   const TeamsConfig({this.enabled = false, this.webhookUrl = ''});
 
   bool get isConfigured => webhookUrl.isNotEmpty;
+}
+
+class MatchConfig {
+  final String gitUrl;
+  final String password;
+  final bool readonly;
+
+  const MatchConfig({
+    this.gitUrl = '',
+    this.password = '',
+    this.readonly = true,
+  });
+
+  bool get isConfigured => gitUrl.isNotEmpty;
 }
 
 class GoogleChatConfig {

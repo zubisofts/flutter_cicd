@@ -145,6 +145,19 @@ class GoogleChatTestRequested extends SettingsEvent {
   List<Object?> get props => [config.webhookUrl];
 }
 
+class MatchConfigSaved extends SettingsEvent {
+  final String gitUrl;
+  final String password;
+  final bool readonly;
+  const MatchConfigSaved({
+    required this.gitUrl,
+    required this.password,
+    required this.readonly,
+  });
+  @override
+  List<Object?> get props => [gitUrl];
+}
+
 // ─── State ────────────────────────────────────────────────────────────────
 
 class SettingsState extends Equatable {
@@ -169,6 +182,7 @@ class SettingsState extends Equatable {
   final String dartDefineFromFile;
   final String firebaseTesterGroups; // comma-separated
 
+  final MatchConfig matchConfig;
   final SmtpConfig smtpConfig;
   final bool isSendingTestEmail;
   final SlackConfig slackConfig;
@@ -205,6 +219,7 @@ class SettingsState extends Equatable {
     this.iosProvisioningProfile = '',
     this.dartDefineFromFile = '',
     this.firebaseTesterGroups = '',
+    this.matchConfig = const MatchConfig(),
     this.smtpConfig = const SmtpConfig(),
     this.isSendingTestEmail = false,
     this.slackConfig = const SlackConfig(),
@@ -237,6 +252,7 @@ class SettingsState extends Equatable {
     String? iosProvisioningProfile,
     String? dartDefineFromFile,
     String? firebaseTesterGroups,
+    MatchConfig? matchConfig,
     SmtpConfig? smtpConfig,
     bool? isSendingTestEmail,
     SlackConfig? slackConfig,
@@ -273,6 +289,7 @@ class SettingsState extends Equatable {
             iosProvisioningProfile ?? this.iosProvisioningProfile,
         dartDefineFromFile: dartDefineFromFile ?? this.dartDefineFromFile,
         firebaseTesterGroups: firebaseTesterGroups ?? this.firebaseTesterGroups,
+        matchConfig: matchConfig ?? this.matchConfig,
         smtpConfig: smtpConfig ?? this.smtpConfig,
         isSendingTestEmail: isSendingTestEmail ?? this.isSendingTestEmail,
         slackConfig: slackConfig ?? this.slackConfig,
@@ -308,6 +325,8 @@ class SettingsState extends Equatable {
         iosProvisioningProfile,
         dartDefineFromFile,
         firebaseTesterGroups,
+        matchConfig.gitUrl,
+        matchConfig.readonly,
         smtpConfig.enabled,
         smtpConfig.host,
         smtpConfig.recipient,
@@ -361,6 +380,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<TeamsTestRequested>(_onTeamsTestRequested);
     on<GoogleChatConfigSaved>(_onGoogleChatConfigSaved);
     on<GoogleChatTestRequested>(_onGoogleChatTestRequested);
+    on<MatchConfigSaved>(_onMatchConfigSaved);
   }
 
   Future<void> _onOpened(
@@ -407,6 +427,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       final slackConfig = await _creds.loadSlackConfig();
       final teamsConfig = await _creds.loadTeamsConfig();
       final googleChatConfig = await _creds.loadGoogleChatConfig();
+      final matchConfig = await _creds.loadMatchConfig(projectId);
       final envConfig = await _configRepo.loadEnv(projectId, envName);
 
       emit(state.copyWith(
@@ -428,6 +449,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
         firebaseTesterGroups: envConfig.distribution.firebase
                 ?.testerGroups.join(', ') ??
             '',
+        matchConfig: matchConfig,
         smtpConfig: smtpConfig,
         slackConfig: slackConfig,
         teamsConfig: teamsConfig,
@@ -707,6 +729,30 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
         isSendingGoogleChatTest: false,
         error: 'Failed to post to Google Chat: $e',
       ));
+    }
+  }
+
+  Future<void> _onMatchConfigSaved(
+      MatchConfigSaved event, Emitter<SettingsState> emit) async {
+    try {
+      await _creds.saveMatchConfig(
+        projectId: state.projectId,
+        gitUrl: event.gitUrl,
+        password: event.password,
+        readonly: event.readonly,
+      );
+      emit(state.copyWith(
+        matchConfig: MatchConfig(
+          gitUrl: event.gitUrl,
+          password: event.password,
+          readonly: event.readonly,
+        ),
+        savedMessage: 'Fastlane Match config saved to Keychain',
+      ));
+      await Future.delayed(const Duration(seconds: 3));
+      emit(state.copyWith(clearSaved: true));
+    } catch (e) {
+      emit(state.copyWith(error: e.toString()));
     }
   }
 }

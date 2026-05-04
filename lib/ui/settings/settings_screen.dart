@@ -74,6 +74,8 @@ class _SettingsContent extends StatelessWidget {
                                   const Gap(12),
                                   _AppleCard(state: state),
                                   const Gap(12),
+                                  _MatchCard(state: state),
+                                  const Gap(12),
                                   _FirebaseCard(state: state),
                                   const Gap(12),
                                   // Email notifications — hidden until ready
@@ -1669,6 +1671,156 @@ class _GoogleChatNotificationCardState
                 label: const Text('Save to Keychain'),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Fastlane Match ───────────────────────────────────────────────────────
+
+class _MatchCard extends StatefulWidget {
+  final SettingsState state;
+  const _MatchCard({required this.state});
+
+  @override
+  State<_MatchCard> createState() => _MatchCardState();
+}
+
+class _MatchCardState extends State<_MatchCard> {
+  late TextEditingController _gitUrlCtrl;
+  late TextEditingController _passwordCtrl;
+  late bool _readonly;
+  bool _showPassword = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initFrom(widget.state.matchConfig);
+  }
+
+  @override
+  void didUpdateWidget(_MatchCard old) {
+    super.didUpdateWidget(old);
+    if (old.state.projectId != widget.state.projectId) {
+      _initFrom(widget.state.matchConfig);
+    }
+  }
+
+  void _initFrom(MatchConfig cfg) {
+    _gitUrlCtrl = TextEditingController(text: cfg.gitUrl);
+    _passwordCtrl = TextEditingController(text: cfg.password);
+    _readonly = cfg.readonly;
+  }
+
+  @override
+  void dispose() {
+    _gitUrlCtrl.dispose();
+    _passwordCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bloc = context.read<SettingsBloc>();
+    final isConfigured = widget.state.matchConfig.isConfigured;
+
+    return SectionCard(
+      title: 'FASTLANE MATCH',
+      trailing: isConfigured
+          ? const Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.lock, size: 12, color: AppTheme.colorSuccess),
+              Gap(4),
+              Text('Keychain',
+                  style: TextStyle(color: AppTheme.colorSuccess, fontSize: 11)),
+            ])
+          : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, size: 13, color: Color(0xFF8B949E)),
+              Gap(6),
+              Expanded(
+                child: Text(
+                  'Fastlane Match syncs certificates and provisioning profiles '
+                  'from a shared private Git repo. All team members pull the same '
+                  'signed identities — no manual cert management.',
+                  style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+          const Gap(12),
+          TextField(
+            controller: _gitUrlCtrl,
+            style: const TextStyle(fontSize: 13),
+            decoration: const InputDecoration(
+              labelText: 'Certs Git URL',
+              hintText: 'git@github.com:org/certificates.git',
+              prefixIcon:
+                  Icon(Icons.source, size: 16, color: Color(0xFF8B949E)),
+            ),
+          ),
+          const Gap(10),
+          TextField(
+            controller: _passwordCtrl,
+            obscureText: !_showPassword,
+            style: const TextStyle(fontSize: 13),
+            decoration: InputDecoration(
+              labelText: 'Match passphrase',
+              hintText: 'Encryption passphrase for the certs repo',
+              prefixIcon: const Icon(Icons.key,
+                  size: 16, color: Color(0xFF8B949E)),
+              suffixIcon: IconButton(
+                icon: Icon(
+                    _showPassword ? Icons.visibility_off : Icons.visibility,
+                    size: 16,
+                    color: const Color(0xFF8B949E)),
+                onPressed: () =>
+                    setState(() => _showPassword = !_showPassword),
+              ),
+            ),
+          ),
+          const Gap(10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Read-only mode', style: TextStyle(fontSize: 13)),
+                  Text(
+                    'Prevents overwriting certs — recommended for CI',
+                    style: TextStyle(
+                        color: Color(0xFF8B949E), fontSize: 11),
+                  ),
+                ],
+              ),
+              Switch(
+                value: _readonly,
+                onChanged: (v) => setState(() => _readonly = v),
+                activeColor: AppTheme.colorSuccess,
+              ),
+            ],
+          ),
+          const Gap(14),
+          Align(
+            alignment: Alignment.centerRight,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                bloc.add(MatchConfigSaved(
+                  gitUrl: _gitUrlCtrl.text.trim(),
+                  password: _passwordCtrl.text,
+                  readonly: _readonly,
+                ));
+              },
+              icon: const Icon(Icons.save, size: 14),
+              label: const Text('Save to Keychain'),
+            ),
           ),
         ],
       ),
