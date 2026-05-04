@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import '../config/config_repository.dart';
 import '../config/environment_resolver.dart';
 import '../config/models/pipeline_definition.dart';
+import '../data/run_repository.dart';
 import '../execution/log_line.dart';
 import 'pipeline_runner.dart';
 import 'step_result.dart';
@@ -146,6 +147,7 @@ class BuildQueue {
 
   final ConfigRepository _configRepo;
   final EnvironmentResolver _envResolver;
+  final RunRepository _repo;
   final String _baseDir;
 
   final List<ActiveBuild> _builds = [];
@@ -155,9 +157,11 @@ class BuildQueue {
   BuildQueue({
     required ConfigRepository configRepo,
     required EnvironmentResolver envResolver,
+    required RunRepository repo,
     String? baseDir,
   })  : _configRepo = configRepo,
         _envResolver = envResolver,
+        _repo = repo,
         _baseDir = baseDir ??
             p.join(Platform.environment['HOME'] ?? '/tmp', '.cicd');
 
@@ -280,6 +284,7 @@ class BuildQueue {
           result.success ? ActiveBuildStatus.completed : ActiveBuildStatus.failed;
       build.completedAt = DateTime.now();
       build.complete(result);
+      _persistRun(build, result);
       _emitList();
       _schedule();
     }).catchError((Object e) {
@@ -289,6 +294,42 @@ class BuildQueue {
       _emitList();
       _schedule();
     });
+  }
+
+  void _persistRun(ActiveBuild build, PipelineRunResult result) async {
+    if (result.runId.isEmpty) return;
+    try {
+      final req = build.request;
+      await _repo.createRun(
+        id: result.runId,
+        projectId: req.projectId,
+        projectName: req.projectName,
+        envName: req.envName,
+        branch: req.branch,
+        versionLabel: '${req.versionName}+${req.buildNumber}',
+        platforms: req.platforms,
+        targets: req.targets,
+      );
+      await _repo.completeRun(
+        id: result.runId,
+        success: result.success,
+        duration: result.totalDuration,
+        errorMessage: result.errorMessage,
+      );
+      // Use pre-populated step display names; fall back to step ID if missing.
+      final stepNames = {for (final s in build.steps) s.stepId: s.stepName};
+      for (final entry in result.stepResults.entries) {
+        final sr = entry.value;
+        await _repo.recordStep(
+          runId: result.runId,
+          stepId: entry.key,
+          stepName: stepNames[entry.key] ?? entry.key,
+          status: sr.status,
+          duration: sr.duration,
+          errorMessage: sr.errorMessage,
+        );
+      }
+    } catch (_) {}
   }
 
   void _emitList() {

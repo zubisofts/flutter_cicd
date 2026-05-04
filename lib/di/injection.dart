@@ -59,6 +59,7 @@ void setupDependencies({required ThemeService themeService}) {
     () => BuildQueue(
       configRepo: getIt<ConfigRepository>(),
       envResolver: getIt<EnvironmentResolver>(),
+      repo: getIt<RunRepository>(),
     ),
   );
 
