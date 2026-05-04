@@ -147,15 +147,17 @@ class GoogleChatTestRequested extends SettingsEvent {
 
 class MatchConfigSaved extends SettingsEvent {
   final String gitUrl;
+  final String branch;
   final String password;
   final bool readonly;
   const MatchConfigSaved({
     required this.gitUrl,
+    required this.branch,
     required this.password,
     required this.readonly,
   });
   @override
-  List<Object?> get props => [gitUrl];
+  List<Object?> get props => [gitUrl, branch];
 }
 
 // ─── State ────────────────────────────────────────────────────────────────
@@ -738,12 +740,14 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       await _creds.saveMatchConfig(
         projectId: state.projectId,
         gitUrl: event.gitUrl,
+        branch: event.branch,
         password: event.password,
         readonly: event.readonly,
       );
       emit(state.copyWith(
         matchConfig: MatchConfig(
           gitUrl: event.gitUrl,
+          branch: event.branch,
           password: event.password,
           readonly: event.readonly,
         ),

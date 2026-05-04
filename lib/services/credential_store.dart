@@ -247,30 +247,31 @@ class CredentialStore {
   Future<void> saveMatchConfig({
     required String projectId,
     required String gitUrl,
+    required String branch,
     required String password,
     required bool readonly,
   }) async {
     await Future.wait([
+      _storage.write(key: _matchKey(projectId, 'git_url'), value: gitUrl),
+      _storage.write(key: _matchKey(projectId, 'branch'), value: branch),
+      _storage.write(key: _matchKey(projectId, 'password'), value: password),
       _storage.write(
-          key: _matchKey(projectId, 'git_url'), value: gitUrl),
-      _storage.write(
-          key: _matchKey(projectId, 'password'), value: password),
-      _storage.write(
-          key: _matchKey(projectId, 'readonly'),
-          value: readonly.toString()),
+          key: _matchKey(projectId, 'readonly'), value: readonly.toString()),
     ]);
   }
 
   Future<MatchConfig> loadMatchConfig(String projectId) async {
     final values = await Future.wait([
       _storage.read(key: _matchKey(projectId, 'git_url')),
+      _storage.read(key: _matchKey(projectId, 'branch')),
       _storage.read(key: _matchKey(projectId, 'password')),
       _storage.read(key: _matchKey(projectId, 'readonly')),
     ]);
     return MatchConfig(
       gitUrl: values[0] ?? '',
-      password: values[1] ?? '',
-      readonly: values[2] != 'false', // defaults to true
+      branch: values[1]?.isNotEmpty == true ? values[1]! : 'main',
+      password: values[2] ?? '',
+      readonly: values[3] != 'false',
     );
   }
 
@@ -358,11 +359,13 @@ class TeamsConfig {
 
 class MatchConfig {
   final String gitUrl;
+  final String branch;
   final String password;
   final bool readonly;
 
   const MatchConfig({
     this.gitUrl = '',
+    this.branch = 'main',
     this.password = '',
     this.readonly = true,
   });
