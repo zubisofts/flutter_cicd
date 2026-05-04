@@ -200,7 +200,7 @@ class _ProjectSection extends StatelessWidget {
           : state.projects.isEmpty
               ? _EmptyProjects()
               : DropdownButtonFormField<String>(
-                  value: state.selectedProject?.id,
+                  initialValue: state.selectedProject?.id,
                   dropdownColor: Theme.of(context).colorScheme.surface,
                   style: TextStyle(
                       fontSize: 13,

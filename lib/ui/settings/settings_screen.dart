@@ -889,7 +889,7 @@ class _EnvConfigCardState extends State<_EnvConfigCard> {
               (v) => bloc.add(EnvConfigFieldUpdated('ios_provisioning_profile', v))),
           const Gap(8),
           DropdownButtonFormField<String>(
-            value: widget.state.iosExportMethod.isNotEmpty
+            initialValue: widget.state.iosExportMethod.isNotEmpty
                 ? widget.state.iosExportMethod
                 : 'app-store',
             dropdownColor: Theme.of(context).colorScheme.surface,

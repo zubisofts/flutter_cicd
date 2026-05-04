@@ -11,6 +11,7 @@ import '../../engine/step_result.dart';
 
 abstract class HistoryEvent extends Equatable {
   const HistoryEvent();
+
   @override
   List<Object?> get props => [];
 }
@@ -21,21 +22,27 @@ class HistoryLoaded extends HistoryEvent {
 
 class HistoryRunSelected extends HistoryEvent {
   final String runId;
+
   const HistoryRunSelected(this.runId);
+
   @override
   List<Object?> get props => [runId];
 }
 
 class HistoryRunDeleted extends HistoryEvent {
   final String runId;
+
   const HistoryRunDeleted(this.runId);
+
   @override
   List<Object?> get props => [runId];
 }
 
 class HistoryRetryRequested extends HistoryEvent {
   final String runId;
+
   const HistoryRetryRequested(this.runId);
+
   @override
   List<Object?> get props => [runId];
 }
@@ -46,7 +53,9 @@ class HistoryRetryClear extends HistoryEvent {
 
 class HistoryResumeRequested extends HistoryEvent {
   final String runId;
+
   const HistoryResumeRequested(this.runId);
+
   @override
   List<Object?> get props => [runId];
 }
@@ -58,7 +67,9 @@ class HistoryResumeClear extends HistoryEvent {
 class HistoryLogLoaded extends HistoryEvent {
   final String runId;
   final List<String> lines;
+
   const HistoryLogLoaded(this.runId, this.lines);
+
   @override
   List<Object?> get props => [runId];
 }
@@ -101,40 +112,38 @@ class HistoryState extends Equatable {
     RunRecord? resumeRun,
     Set<String>? resumeSkipStepIds,
     bool clearResume = false,
-  }) =>
-      HistoryState(
-        runs: runs ?? this.runs,
-        selectedRun:
-            clearSelection ? null : (selectedRun ?? this.selectedRun),
-        selectedSteps:
-            clearSelection ? [] : (selectedSteps ?? this.selectedSteps),
-        logLines: clearSelection ? [] : (logLines ?? this.logLines),
-        isLoading: isLoading ?? this.isLoading,
-        error: error ?? this.error,
-        retryRun: clearRetry ? null : (retryRun ?? this.retryRun),
-        resumeRun: clearResume ? null : (resumeRun ?? this.resumeRun),
-        resumeSkipStepIds:
-            clearResume ? {} : (resumeSkipStepIds ?? this.resumeSkipStepIds),
-      );
+  }) => HistoryState(
+    runs: runs ?? this.runs,
+    selectedRun: clearSelection ? null : (selectedRun ?? this.selectedRun),
+    selectedSteps: clearSelection ? [] : (selectedSteps ?? this.selectedSteps),
+    logLines: clearSelection ? [] : (logLines ?? this.logLines),
+    isLoading: isLoading ?? this.isLoading,
+    error: error ?? this.error,
+    retryRun: clearRetry ? null : (retryRun ?? this.retryRun),
+    resumeRun: clearResume ? null : (resumeRun ?? this.resumeRun),
+    resumeSkipStepIds: clearResume
+        ? {}
+        : (resumeSkipStepIds ?? this.resumeSkipStepIds),
+  );
 
   // Stats
   int get successCount => runs.where((r) => r.success).length;
-  String get successRate => runs.isEmpty
-      ? '—'
-      : '${(successCount / runs.length * 100).round()}%';
+
+  String get successRate =>
+      runs.isEmpty ? '—' : '${(successCount / runs.length * 100).round()}%';
 
   @override
   List<Object?> get props => [
-        runs.length,
-        selectedRun?.id,
-        selectedSteps.length,
-        logLines.length,
-        isLoading,
-        error,
-        retryRun?.id,
-        resumeRun?.id,
-        resumeSkipStepIds.length,
-      ];
+    runs.length,
+    selectedRun?.id,
+    selectedSteps.length,
+    logLines.length,
+    isLoading,
+    error,
+    retryRun?.id,
+    resumeRun?.id,
+    resumeSkipStepIds.length,
+  ];
 }
 
 // ─── BLoC ─────────────────────────────────────────────────────────────────
@@ -144,22 +153,25 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
   final String _baseDir;
 
   HistoryBloc(this._repo, {String? baseDir})
-      : _baseDir = baseDir ??
-            p.join(
-                Platform.environment['HOME'] ?? '/tmp', '.cicd'),
-        super(const HistoryState()) {
+    : _baseDir =
+          baseDir ?? p.join(Platform.environment['HOME'] ?? '/tmp', '.cicd'),
+      super(const HistoryState()) {
     on<HistoryLoaded>(_onLoaded);
     on<HistoryRunSelected>(_onRunSelected);
     on<HistoryRunDeleted>(_onRunDeleted);
     on<HistoryRetryRequested>(_onRetryRequested);
     on<HistoryRetryClear>((_, emit) => emit(state.copyWith(clearRetry: true)));
     on<HistoryResumeRequested>(_onResumeRequested);
-    on<HistoryResumeClear>((_, emit) => emit(state.copyWith(clearResume: true)));
+    on<HistoryResumeClear>(
+      (_, emit) => emit(state.copyWith(clearResume: true)),
+    );
     on<HistoryLogLoaded>(_onLogLoaded);
   }
 
   Future<void> _onLoaded(
-      HistoryLoaded event, Emitter<HistoryState> emit) async {
+    HistoryLoaded event,
+    Emitter<HistoryState> emit,
+  ) async {
     emit(state.copyWith(isLoading: true));
     try {
       final runs = await _repo.getAll();
@@ -170,20 +182,25 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
   }
 
   Future<void> _onRunSelected(
-      HistoryRunSelected event, Emitter<HistoryState> emit) async {
+    HistoryRunSelected event,
+    Emitter<HistoryState> emit,
+  ) async {
     final run = state.runs.firstWhere(
       (r) => r.id == event.runId,
       orElse: () => state.runs.first,
     );
     final steps = await _repo.getSteps(event.runId);
-    emit(state.copyWith(
-      selectedRun: run,
-      selectedSteps: steps,
-    ));
+    emit(
+      state.copyWith(
+        selectedRun: run,
+        selectedSteps: steps
+            .where((step) => step.statusIndex != StepStatus.skipped.index)
+            .toList(),
+      ),
+    );
 
     // Load log file async
-    final logFile = File(
-        p.join(_baseDir, 'runs', event.runId, 'run.log'));
+    final logFile = File(p.join(_baseDir, 'runs', event.runId, 'run.log'));
     if (await logFile.exists()) {
       final lines = await logFile.readAsLines();
       add(HistoryLogLoaded(event.runId, lines));
@@ -191,29 +208,29 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
   }
 
   Future<void> _onRunDeleted(
-      HistoryRunDeleted event, Emitter<HistoryState> emit) async {
+    HistoryRunDeleted event,
+    Emitter<HistoryState> emit,
+  ) async {
     try {
       await _repo.deleteRun(event.runId);
       // Also delete the run log file from disk
-      final logFile =
-          File(p.join(_baseDir, 'runs', event.runId, 'run.log'));
+      final logFile = File(p.join(_baseDir, 'runs', event.runId, 'run.log'));
       if (await logFile.exists()) await logFile.delete();
       final runDir = Directory(p.join(_baseDir, 'runs', event.runId));
       if (await runDir.exists()) await runDir.delete(recursive: true);
 
       final runs = await _repo.getAll();
       final wasSelected = state.selectedRun?.id == event.runId;
-      emit(state.copyWith(
-        runs: runs,
-        clearSelection: wasSelected,
-      ));
+      emit(state.copyWith(runs: runs, clearSelection: wasSelected));
     } catch (e) {
       emit(state.copyWith(error: e.toString()));
     }
   }
 
   void _onRetryRequested(
-      HistoryRetryRequested event, Emitter<HistoryState> emit) {
+    HistoryRetryRequested event,
+    Emitter<HistoryState> emit,
+  ) {
     final run = state.runs.firstWhere(
       (r) => r.id == event.runId,
       orElse: () => state.runs.first,
@@ -222,7 +239,9 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
   }
 
   void _onResumeRequested(
-      HistoryResumeRequested event, Emitter<HistoryState> emit) {
+    HistoryResumeRequested event,
+    Emitter<HistoryState> emit,
+  ) {
     final run = state.runs.firstWhere(
       (r) => r.id == event.runId,
       orElse: () => state.runs.first,
