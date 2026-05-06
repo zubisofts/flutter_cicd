@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'package:googleapis_auth/auth_io.dart' as gauth;
+import 'package:http/http.dart' as http;
 import '../pipeline_context.dart';
 import '../step_result.dart';
 import '../../execution/log_line.dart';
@@ -10,14 +13,12 @@ import 'pipeline_step.dart';
 /// (Android), takes the max across both, increments by 1, and stores the
 /// result in ctx.state['resolved_build_number'].
 ///
-/// Only runs when the targets include 'testflight' or 'playstore' — dev/staging
-/// Firebase-only runs skip it entirely and use the manual build number.
+/// Only runs when targets include 'testflight' or 'playstore' — dev/staging
+/// Firebase-only runs skip it and use the manual build number unchanged.
 ///
-/// iOS: runs a temp Fastfile lane (requires api_key chaining via
-///   app_store_connect_api_key + latest_testflight_build_number).
-/// Android: calls `fastlane run google_play_track_version_codes` directly
-///   per track and parses fastlane's "Result:" output — avoids the silent
-///   rescue problem of a shared Ruby loop.
+/// iOS:     Fastfile lane (needs app_store_connect_api_key + latest_testflight_build_number).
+/// Android: Direct Google Play Developer API call using the service account JSON —
+///          no fastlane supply involved, so authentication and track listing are reliable.
 class ResolveBuildNumberStep extends PipelineStep {
   final ProcessRunner _runner;
 
@@ -52,9 +53,6 @@ class ResolveBuildNumberStep extends PipelineStep {
       'LANG': 'en_US.UTF-8',
       'LC_ALL': 'en_US.UTF-8',
       'BUNDLE_ID': env.iosBundleId,
-      'ANDROID_PACKAGE_NAME': env.androidPackageName,
-      'SUPPLY_PACKAGE_NAME': env.androidPackageName,
-      'SUPPLY_JSON_KEY': env.shellEnv['PLAY_STORE_JSON_KEY'] ?? '',
     };
 
     try {
@@ -63,14 +61,16 @@ class ResolveBuildNumberStep extends PipelineStep {
 
       if (queryIos) {
         iosBuild = await _resolveIos(ctx, shellEnv);
-        ctx.logSink.addRaw(
-            id, LogLevel.info, 'TestFlight latest build: $iosBuild');
+        ctx.logSink.addRaw(id, LogLevel.info, 'TestFlight latest build: $iosBuild');
       }
 
       if (queryAndroid) {
-        androidBuild = await _resolveAndroid(ctx, shellEnv, env.androidPackageName);
-        ctx.logSink.addRaw(
-            id, LogLevel.info, 'Play Store max version code: $androidBuild');
+        androidBuild = await _resolveAndroid(
+          ctx,
+          env.shellEnv['PLAY_STORE_JSON_KEY'] ?? '',
+          env.androidPackageName,
+        );
+        ctx.logSink.addRaw(id, LogLevel.info, 'Play Store max version code: $androidBuild');
       }
 
       final next = max(iosBuild, androidBuild) + 1;
@@ -92,8 +92,8 @@ class ResolveBuildNumberStep extends PipelineStep {
     }
   }
 
-  // iOS needs a Fastfile because latest_testflight_build_number requires the
-  // api_key object from app_store_connect_api_key — can't chain via fastlane run.
+  // ── iOS — Fastfile lane ─────────────────────────────────────────────────
+
   Future<int> _resolveIos(
       PipelineContext ctx, Map<String, String> shellEnv) async {
     if ((shellEnv['ASC_KEY_ID'] ?? '').isEmpty) {
@@ -123,77 +123,73 @@ class ResolveBuildNumberStep extends PipelineStep {
     }
   }
 
-  // Android uses `fastlane run google_play_track_version_codes` directly per
-  // track — no Fastfile needed, and fastlane's own "Result:" output is parsed
-  // so failures are visible rather than silently rescued.
+  // ── Android — direct Google Play Developer API ──────────────────────────
+
   Future<int> _resolveAndroid(
-      PipelineContext ctx,
-      Map<String, String> shellEnv,
-      String packageName) async {
-    final jsonKey = shellEnv['PLAY_STORE_JSON_KEY'] ?? '';
-    if (jsonKey.isEmpty) {
+      PipelineContext ctx, String jsonKeyPath, String packageName) async {
+    if (jsonKeyPath.isEmpty) {
       ctx.logSink.addRaw(id, LogLevel.warning,
           'Play Store JSON key not configured — skipping Android build number query');
       return 0;
     }
 
-    int maxCode = 0;
-    for (final track in const ['internal', 'alpha', 'beta', 'production']) {
-      final result = await _runner.run(
-        command: [
-          'fastlane', 'run', 'google_play_track_version_codes',
-          'package_name:$packageName',
-          'json_key:$jsonKey',
-          'track:$track',
-        ],
-        workingDir: Directory.systemTemp.path,
-        environment: shellEnv,
-        timeout: const Duration(minutes: 2),
-        logSink: ctx.logSink,
-        stepId: id,
-        cancelSignal: ctx.abortSignal,
+    try {
+      final keyContent = await File(jsonKeyPath).readAsString();
+      final credentials = gauth.ServiceAccountCredentials.fromJson(keyContent);
+      final authClient = await gauth.clientViaServiceAccount(
+        credentials,
+        ['https://www.googleapis.com/auth/androidpublisher'],
+        baseClient: http.Client(),
       );
+      try {
+        final uri = Uri.parse(
+          'https://www.googleapis.com/androidpublisher/v3/applications'
+          '/$packageName/tracks',
+        );
+        final response = await authClient.get(uri);
 
-      if (result.success) {
-        final code = _parseVersionCodes(result.output);
-        if (code != null && code > 0) {
-          ctx.logSink.addRaw(
-              id, LogLevel.info, 'Play Store track "$track": $code');
-          if (code > maxCode) maxCode = code;
-        } else {
-          ctx.logSink.addRaw(
-              id, LogLevel.info, 'Play Store track "$track": empty');
+        if (response.statusCode != 200) {
+          ctx.logSink.addRaw(id, LogLevel.warning,
+              'Play Store API error ${response.statusCode}: '
+              '${response.body.length > 300 ? response.body.substring(0, 300) : response.body}');
+          return 0;
         }
-      } else {
-        ctx.logSink.addRaw(
-            id, LogLevel.info, 'Play Store track "$track": not found or error');
+
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final tracks = data['tracks'] as List? ?? [];
+
+        int maxCode = 0;
+        for (final track in tracks) {
+          final trackName = track['track'] as String? ?? '';
+          final releases = track['releases'] as List? ?? [];
+          for (final release in releases) {
+            final codes = release['versionCodes'] as List? ?? [];
+            for (final code in codes) {
+              final n = int.tryParse(code.toString()) ?? 0;
+              if (n > maxCode) {
+                maxCode = n;
+                ctx.logSink.addRaw(
+                    id, LogLevel.info, 'Play Store track "$trackName": $n');
+              }
+            }
+          }
+        }
+        return maxCode;
+      } finally {
+        authClient.close();
       }
+    } catch (e) {
+      ctx.logSink.addRaw(id, LogLevel.warning, 'Play Store query failed: $e');
+      return 0;
     }
-    return maxCode;
   }
 
-  // Parses the marker emitted by the iOS Fastfile lane: CICD_BUILD_NUMBER:<n>
+  // ── Helpers ─────────────────────────────────────────────────────────────
+
   int? _parseMarker(List<String> lines) {
     for (final line in lines.reversed) {
       final m = RegExp(r'CICD_BUILD_NUMBER:(\d+)').firstMatch(line);
       if (m != null) return int.tryParse(m.group(1)!);
-    }
-    return null;
-  }
-
-  // Parses fastlane's own "Result: 45" or "Result: [42, 43, 44]" output.
-  int? _parseVersionCodes(List<String> lines) {
-    for (final line in lines.reversed) {
-      final m = RegExp(r'Result:\s*\[?([\d,\s]+)\]?').firstMatch(line);
-      if (m != null) {
-        final nums = m
-            .group(1)!
-            .split(',')
-            .map((s) => int.tryParse(s.trim()))
-            .whereType<int>()
-            .toList();
-        if (nums.isNotEmpty) return nums.reduce(max);
-      }
     }
     return null;
   }
