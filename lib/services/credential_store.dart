@@ -133,6 +133,16 @@ class CredentialStore {
     return await _get('cicd.firebase.service_account') ?? '';
   }
 
+  // ── GitHub token ─────────────────────────────────────────────────────────
+
+  Future<void> saveGitHubToken(String projectId, String token) async {
+    await _set('cicd.$projectId.git.github_token', token);
+  }
+
+  Future<String> loadGitHubToken(String projectId) async {
+    return await _get('cicd.$projectId.git.github_token') ?? '';
+  }
+
   // ── Play Store ────────────────────────────────────────────────────────────
 
   Future<void> savePlayStoreKey(String jsonContent) async {

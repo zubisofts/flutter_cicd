@@ -145,6 +145,13 @@ class GoogleChatTestRequested extends SettingsEvent {
   List<Object?> get props => [config.webhookUrl];
 }
 
+class GitHubTokenSaved extends SettingsEvent {
+  final String token;
+  const GitHubTokenSaved(this.token);
+  @override
+  List<Object?> get props => [token];
+}
+
 class MatchConfigSaved extends SettingsEvent {
   final String gitUrl;
   final String branch;
@@ -184,6 +191,7 @@ class SettingsState extends Equatable {
   final String dartDefineFromFile;
   final String firebaseTesterGroups; // comma-separated
 
+  final String gitHubToken;
   final MatchConfig matchConfig;
   final SmtpConfig smtpConfig;
   final bool isSendingTestEmail;
@@ -221,6 +229,7 @@ class SettingsState extends Equatable {
     this.iosProvisioningProfile = '',
     this.dartDefineFromFile = '',
     this.firebaseTesterGroups = '',
+    this.gitHubToken = '',
     this.matchConfig = const MatchConfig(),
     this.smtpConfig = const SmtpConfig(),
     this.isSendingTestEmail = false,
@@ -254,6 +263,7 @@ class SettingsState extends Equatable {
     String? iosProvisioningProfile,
     String? dartDefineFromFile,
     String? firebaseTesterGroups,
+    String? gitHubToken,
     MatchConfig? matchConfig,
     SmtpConfig? smtpConfig,
     bool? isSendingTestEmail,
@@ -291,6 +301,7 @@ class SettingsState extends Equatable {
             iosProvisioningProfile ?? this.iosProvisioningProfile,
         dartDefineFromFile: dartDefineFromFile ?? this.dartDefineFromFile,
         firebaseTesterGroups: firebaseTesterGroups ?? this.firebaseTesterGroups,
+        gitHubToken: gitHubToken ?? this.gitHubToken,
         matchConfig: matchConfig ?? this.matchConfig,
         smtpConfig: smtpConfig ?? this.smtpConfig,
         isSendingTestEmail: isSendingTestEmail ?? this.isSendingTestEmail,
@@ -327,6 +338,7 @@ class SettingsState extends Equatable {
         iosProvisioningProfile,
         dartDefineFromFile,
         firebaseTesterGroups,
+        gitHubToken,
         matchConfig.gitUrl,
         matchConfig.readonly,
         smtpConfig.enabled,
@@ -382,6 +394,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<TeamsTestRequested>(_onTeamsTestRequested);
     on<GoogleChatConfigSaved>(_onGoogleChatConfigSaved);
     on<GoogleChatTestRequested>(_onGoogleChatTestRequested);
+    on<GitHubTokenSaved>(_onGitHubTokenSaved);
     on<MatchConfigSaved>(_onMatchConfigSaved);
   }
 
@@ -430,6 +443,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       final teamsConfig = await _creds.loadTeamsConfig();
       final googleChatConfig = await _creds.loadGoogleChatConfig();
       final matchConfig = await _creds.loadMatchConfig(projectId);
+      final gitHubToken = await _creds.loadGitHubToken(projectId);
       final envConfig = await _configRepo.loadEnv(projectId, envName);
 
       emit(state.copyWith(
@@ -451,6 +465,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
         firebaseTesterGroups: envConfig.distribution.firebase
                 ?.testerGroups.join(', ') ??
             '',
+        gitHubToken: gitHubToken,
         matchConfig: matchConfig,
         smtpConfig: smtpConfig,
         slackConfig: slackConfig,
@@ -731,6 +746,21 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
         isSendingGoogleChatTest: false,
         error: 'Failed to post to Google Chat: $e',
       ));
+    }
+  }
+
+  Future<void> _onGitHubTokenSaved(
+      GitHubTokenSaved event, Emitter<SettingsState> emit) async {
+    try {
+      await _creds.saveGitHubToken(state.projectId, event.token);
+      emit(state.copyWith(
+        gitHubToken: event.token,
+        savedMessage: 'GitHub token saved to Keychain',
+      ));
+      await Future.delayed(const Duration(seconds: 3));
+      emit(state.copyWith(clearSaved: true));
+    } catch (e) {
+      emit(state.copyWith(error: e.toString()));
     }
   }
 
