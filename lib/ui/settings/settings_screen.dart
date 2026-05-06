@@ -74,6 +74,8 @@ class _SettingsContent extends StatelessWidget {
                             Expanded(
                               child: Column(
                                 children: [
+                                  _GitSshKeyCard(state: state),
+                                  const Gap(12),
                                   _AndroidSigningCard(state: state),
                                   const Gap(12),
                                   _AppleCard(state: state),
@@ -1673,6 +1675,103 @@ class _GoogleChatNotificationCardState
                     bloc.add(GoogleChatConfigSaved(_currentConfig())),
                 icon: const Icon(Icons.save, size: 14),
                 label: const Text('Save to Keychain'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── GitHub Token ─────────────────────────────────────────────────────────
+
+class _GitSshKeyCard extends StatefulWidget {
+  final SettingsState state;
+  const _GitSshKeyCard({required this.state});
+
+  @override
+  State<_GitSshKeyCard> createState() => _GitSshKeyCardState();
+}
+
+class _GitSshKeyCardState extends State<_GitSshKeyCard> {
+  late TextEditingController _tokenCtrl;
+  bool _obscure = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _tokenCtrl = TextEditingController(text: widget.state.gitHubToken);
+  }
+
+  @override
+  void didUpdateWidget(_GitSshKeyCard old) {
+    super.didUpdateWidget(old);
+    if (old.state.projectId != widget.state.projectId ||
+        (old.state.isLoading && !widget.state.isLoading)) {
+      _tokenCtrl.text = widget.state.gitHubToken;
+    }
+  }
+
+  @override
+  void dispose() {
+    _tokenCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bloc = context.read<SettingsBloc>();
+    final configured = widget.state.gitHubToken.isNotEmpty;
+    return SectionCard(
+      title: 'GITHUB ACCESS',
+      trailing: configured
+          ? Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.check_circle,
+                  size: 14, color: AppTheme.colorSuccess),
+              const Gap(4),
+              Text('Configured',
+                  style: TextStyle(
+                      color: AppTheme.colorSuccess, fontSize: 11)),
+            ])
+          : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Personal Access Token (classic) with repo scope. '
+            'Used to clone private repositories over HTTPS — '
+            'no SSH key setup required.',
+            style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 12),
+          ),
+          const Gap(12),
+          TextFormField(
+            controller: _tokenCtrl,
+            obscureText: _obscure,
+            decoration: InputDecoration(
+              labelText: 'Personal Access Token',
+              hintText: 'ghp_xxxxxxxxxxxxxxxxxxxx',
+              prefixIcon: const Icon(Icons.token,
+                  size: 14, color: Color(0xFF8B949E)),
+              suffixIcon: IconButton(
+                icon: Icon(
+                    _obscure ? Icons.visibility : Icons.visibility_off,
+                    size: 16),
+                onPressed: () => setState(() => _obscure = !_obscure),
+              ),
+            ),
+            style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+          ),
+          const Gap(12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              FilledButton(
+                onPressed: () =>
+                    bloc.add(GitHubTokenSaved(_tokenCtrl.text.trim())),
+                child: const Text('Save'),
               ),
             ],
           ),

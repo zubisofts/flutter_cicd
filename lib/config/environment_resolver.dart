@@ -45,6 +45,7 @@ class EnvironmentResolver {
     final firebaseContent = await _credentials.loadFirebaseServiceAccount();
     final playStoreContent = await _credentials.loadPlayStoreKey();
     final matchConfig = await _credentials.loadMatchConfig(projectId);
+    final gitHubToken = await _credentials.loadGitHubToken(projectId);
 
     final firebaseCredPath = await _writeTempCredential(
       runId: runId,
@@ -74,6 +75,7 @@ class EnvironmentResolver {
       firebaseCredPath: firebaseCredPath,
       playStoreCredPath: playStoreCredPath,
       matchConfig: matchConfig,
+      gitHubToken: gitHubToken,
     );
 
     return ResolvedEnvironment(
@@ -136,6 +138,7 @@ class EnvironmentResolver {
     required String firebaseCredPath,
     required String playStoreCredPath,
     required MatchConfig matchConfig,
+    required String gitHubToken,
   }) {
     final sysEnv = Platform.environment;
     // Derive Match type from the iOS export method (e.g. "app-store" → "appstore")
@@ -187,6 +190,10 @@ class EnvironmentResolver {
           : sysEnv['MATCH_PASSWORD'] ?? '',
       'MATCH_TYPE': matchType,
       'MATCH_READONLY': matchConfig.readonly ? 'true' : 'false',
+
+      // GitHub PAT — consumed by git_checkout_step to rewrite the clone URL
+      // to HTTPS. Not passed directly to git; the step injects it into the URL.
+      if (gitHubToken.isNotEmpty) 'GITHUB_TOKEN': gitHubToken,
     };
   }
 
