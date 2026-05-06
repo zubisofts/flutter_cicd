@@ -26,6 +26,7 @@ class FlutterPubGetStep extends PipelineStep {
       final result = await _runner.run(
         command: ['flutter', 'pub', 'get'],
         workingDir: ctx.workspaceDir,
+        environment: ctx.environment.shellEnv,
         logSink: ctx.logSink,
         stepId: id,
         cancelSignal: ctx.abortSignal,
@@ -50,6 +51,7 @@ class FlutterPubGetStep extends PipelineStep {
       final result = await _runner.run(
         command: ['flutter', 'pub', 'get'],
         workingDir: ctx.workspaceDir,
+        environment: ctx.environment.shellEnv,
         logSink: ctx.logSink,
         stepId: id,
       );
@@ -77,6 +79,7 @@ class FlutterPubGetStep extends PipelineStep {
         '--delete-conflicting-outputs',
       ],
       workingDir: ctx.workspaceDir,
+      environment: ctx.environment.shellEnv,
       logSink: ctx.logSink,
       stepId: id,
     );
