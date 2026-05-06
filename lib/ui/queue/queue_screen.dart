@@ -20,6 +20,10 @@ class QueueScreen extends StatefulWidget {
 class _QueueScreenState extends State<QueueScreen> {
   String? _selectedBuildId;
   bool _detailVisible = false;
+  // Tracks build IDs we've already seen so we can detect newly enqueued builds
+  // and auto-select them without disturbing the current selection logic.
+  Set<String> _knownBuildIds = {};
+  bool _initialized = false;
 
   static const _narrowBreakpoint = 700.0;
   static const _listWidth = 280.0;
@@ -33,8 +37,20 @@ class _QueueScreenState extends State<QueueScreen> {
       builder: (context, snapshot) {
         final builds = snapshot.data ?? queue.builds;
 
-        if (_selectedBuildId == null && builds.isNotEmpty) {
-          _selectedBuildId = builds.first.id;
+        if (!_initialized && builds.isNotEmpty) {
+          // First non-empty render — seed known IDs and select the first build.
+          _initialized = true;
+          _selectedBuildId ??= builds.first.id;
+          _knownBuildIds = builds.map((b) => b.id).toSet();
+        } else if (_initialized) {
+          // On subsequent emissions, auto-select any build that just appeared.
+          final newBuild =
+              builds.where((b) => !_knownBuildIds.contains(b.id)).firstOrNull;
+          if (newBuild != null) {
+            _selectedBuildId = newBuild.id;
+            _detailVisible = true; // show detail immediately on narrow layout
+          }
+          _knownBuildIds = builds.map((b) => b.id).toSet();
         }
 
         final selected = builds.isEmpty
