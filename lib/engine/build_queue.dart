@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'dart:collection';
-import 'dart:io';
-import 'package:path/path.dart' as p;
 import '../config/config_repository.dart';
 import '../config/environment_resolver.dart';
 import '../config/models/pipeline_definition.dart';
@@ -137,7 +135,13 @@ class ActiveBuild {
 
   String get displayLabel => '${request.projectName} › ${request.envName}';
 
-  String get versionLabel => '${request.versionName}+${request.buildNumber}';
+  bool get _isStoreBuild =>
+      request.targets.contains('testflight') ||
+      request.targets.contains('playstore');
+
+  String get versionLabel => _isStoreBuild
+      ? request.versionName
+      : '${request.versionName}+${request.buildNumber}';
 }
 
 class BuildQueue {
@@ -148,7 +152,6 @@ class BuildQueue {
   final ConfigRepository _configRepo;
   final EnvironmentResolver _envResolver;
   final RunRepository _repo;
-  final String _baseDir;
 
   final List<ActiveBuild> _builds = [];
   final _listController = StreamController<List<ActiveBuild>>.broadcast();
@@ -158,12 +161,9 @@ class BuildQueue {
     required ConfigRepository configRepo,
     required EnvironmentResolver envResolver,
     required RunRepository repo,
-    String? baseDir,
   })  : _configRepo = configRepo,
         _envResolver = envResolver,
-        _repo = repo,
-        _baseDir = baseDir ??
-            p.join(Platform.environment['HOME'] ?? '/tmp', '.cicd');
+        _repo = repo;
 
   Stream<List<ActiveBuild>> get stream => _listController.stream;
   List<ActiveBuild> get builds => List.unmodifiable(_builds);
