@@ -6,6 +6,7 @@ import '../../config/config_repository.dart';
 import '../../config/models/app_project.dart';
 import '../../engine/pipeline_runner.dart';
 import '../../execution/process_runner.dart' show sshAgentEnv;
+import '../../services/credential_store.dart';
 
 // ─── Events ───────────────────────────────────────────────────────────────
 
@@ -243,8 +244,9 @@ class SetupState extends Equatable {
 
 class SetupBloc extends Bloc<SetupEvent, SetupState> {
   final ConfigRepository _configRepo;
+  final CredentialStore _credentials;
 
-  SetupBloc(this._configRepo) : super(const SetupState()) {
+  SetupBloc(this._configRepo, this._credentials) : super(const SetupState()) {
     on<SetupInitialized>(_onInit);
     on<ProjectSelected>(_onProjectSelected);
     on<BranchChanged>(_onBranchChanged);
@@ -287,7 +289,7 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
       if (projects.isNotEmpty) {
         await _loadEnvs(projects.first.id, emit);
         await _applyLastRunConfig(projects.first.id, emit);
-        _fetchBranches(projects.first.repository);
+        _fetchBranches(projects.first.repository, projectId: projects.first.id);
       }
     } catch (e) {
       emit(state.copyWith(isLoading: false, error: e.toString()));
@@ -305,7 +307,7 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
     ));
     await _loadEnvs(event.project.id, emit);
     await _applyLastRunConfig(event.project.id, emit);
-    _fetchBranches(event.project.repository);
+    _fetchBranches(event.project.repository, projectId: event.project.id);
   }
 
   Future<void> _loadEnvs(String projectId, Emitter<SetupState> emit) async {
@@ -449,7 +451,7 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
         clearError: true,
       ));
       await _loadEnvs(event.id, emit);
-      _fetchBranches(event.repository);
+      _fetchBranches(event.repository, projectId: event.id);
     } catch (e) {
       emit(state.copyWith(isLoading: false, error: e.toString()));
     }
@@ -472,24 +474,45 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
       ));
       if (projects.isNotEmpty) {
         await _loadEnvs(projects.first.id, emit);
-        _fetchBranches(projects.first.repository);
+        _fetchBranches(projects.first.repository, projectId: projects.first.id);
       }
     } catch (e) {
       emit(state.copyWith(isLoading: false, error: e.toString()));
     }
   }
 
-  void _fetchBranches(String repoUrl) {
+  void _fetchBranches(String repoUrl, {String? projectId}) {
     if (repoUrl.isEmpty) {
       add(const RefsFetched(branches: [], tags: []));
       return;
     }
-    sshAgentEnv().then((sshEnv) => Process.run(
-      '/usr/bin/git',
-      ['ls-remote', '--heads', '--tags', repoUrl],
-      environment: {...Platform.environment, ...sshEnv},
-      runInShell: false,
-    )).timeout(const Duration(seconds: 15), onTimeout: () {
+    Future.wait([
+      sshAgentEnv(),
+      if (projectId != null)
+        _credentials.loadGitHubToken(projectId)
+      else
+        Future.value(''),
+    ]).then((results) {
+      final sshEnv = results[0] as Map<String, String>;
+      final token = results[1] as String;
+      final tokenEnv = token.isNotEmpty
+          ? {
+              'GIT_CONFIG_COUNT': '2',
+              'GIT_CONFIG_KEY_0':
+                  'url.https://oauth2:$token@github.com/.insteadOf',
+              'GIT_CONFIG_VALUE_0': 'git@github.com:',
+              'GIT_CONFIG_KEY_1':
+                  'url.https://oauth2:$token@github.com/.insteadOf',
+              'GIT_CONFIG_VALUE_1': 'https://github.com/',
+            }
+          : <String, String>{};
+      return Process.run(
+        '/usr/bin/git',
+        ['ls-remote', '--heads', '--tags', repoUrl],
+        environment: {...Platform.environment, ...sshEnv, ...tokenEnv},
+        runInShell: false,
+      );
+    }).timeout(const Duration(seconds: 15), onTimeout: () {
       return ProcessResult(0, 1, '', 'timeout');
     }).then((result) {
       if (isClosed) return;

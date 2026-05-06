@@ -25,6 +25,11 @@ class GitCheckoutStep extends PipelineStep {
       );
     }
 
+    final hasToken = ctx.environment.shellEnv.containsKey('GIT_CONFIG_COUNT');
+    ctx.logSink.addRaw(id, LogLevel.info,
+        hasToken
+            ? 'Auth: GitHub token (HTTPS URL rewrite active)'
+            : 'Auth: system SSH (no GitHub token configured)');
     ctx.logSink.addRaw(id, LogLevel.info,
         'Cloning $repoUrl @ $branch into $workspace');
 

@@ -5,6 +5,7 @@ import 'package:gap/gap.dart';
 import '../../config/models/app_project.dart';
 import '../../di/injection.dart';
 import '../../config/config_repository.dart';
+import '../../services/credential_store.dart';
 import '../../engine/build_queue.dart';
 import '../dialogs/production_confirm_dialog.dart';
 import '../dialogs/new_project_dialog.dart';
@@ -20,7 +21,7 @@ class SetupScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (_) =>
-          SetupBloc(getIt<ConfigRepository>())..add(const SetupInitialized()),
+          SetupBloc(getIt<ConfigRepository>(), getIt<CredentialStore>())..add(const SetupInitialized()),
       child: const _SetupScreenContent(),
     );
   }
@@ -200,7 +201,7 @@ class _ProjectSection extends StatelessWidget {
           : state.projects.isEmpty
               ? _EmptyProjects()
               : DropdownButtonFormField<String>(
-                  initialValue: state.selectedProject?.id,
+                  value: state.selectedProject?.id,
                   dropdownColor: Theme.of(context).colorScheme.surface,
                   style: TextStyle(
                       fontSize: 13,
