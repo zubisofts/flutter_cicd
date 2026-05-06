@@ -22,6 +22,11 @@ class FastlaneLaneStep extends PipelineStep {
 
     final shellEnv = {
       ...env.shellEnv,
+      // fastlane (Ruby) requires UTF-8 locale or it crashes on non-ASCII
+      // changelog text with "incompatible encoding" errors.
+      'LANG': 'en_US.UTF-8',
+      'LC_ALL': 'en_US.UTF-8',
+      'LC_CTYPE': 'en_US.UTF-8',
       'BUNDLE_ID': env.iosBundleId,
       'ANDROID_PACKAGE_NAME': env.androidPackageName,
       'IPA_PATH': ctx.artifactPath('ios') ?? '',
