@@ -191,9 +191,19 @@ class EnvironmentResolver {
       'MATCH_TYPE': matchType,
       'MATCH_READONLY': matchConfig.readonly ? 'true' : 'false',
 
-      // GitHub PAT — consumed by git_checkout_step to rewrite the clone URL
-      // to HTTPS. Not passed directly to git; the step injects it into the URL.
-      if (gitHubToken.isNotEmpty) 'GITHUB_TOKEN': gitHubToken,
+      // GitHub PAT — injected as git URL-rewrite rules so every git operation
+      // in the subprocess tree (clone, flutter pub get git deps, fastlane match)
+      // authenticates automatically over HTTPS without SSH key setup.
+      // GIT_CONFIG_COUNT/KEY/VALUE are read by git ≥ 2.31 as extra config entries.
+      if (gitHubToken.isNotEmpty) ...{
+        'GIT_CONFIG_COUNT': '2',
+        // Rewrite SSH URLs: git@github.com:org/repo → https://oauth2:TOKEN@github.com/org/repo
+        'GIT_CONFIG_KEY_0': 'url.https://oauth2:$gitHubToken@github.com/.insteadOf',
+        'GIT_CONFIG_VALUE_0': 'git@github.com:',
+        // Rewrite plain HTTPS URLs: https://github.com/ → https://oauth2:TOKEN@github.com/
+        'GIT_CONFIG_KEY_1': 'url.https://oauth2:$gitHubToken@github.com/.insteadOf',
+        'GIT_CONFIG_VALUE_1': 'https://github.com/',
+      },
     };
   }
 
