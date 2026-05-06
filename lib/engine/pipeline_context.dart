@@ -42,6 +42,12 @@ class PipelineContext {
   void putArtifact(String platform, String path) =>
       state['artifact_$platform'] = path;
 
+  /// The build number to use for this run. Prefers the value written by
+  /// ResolveBuildNumberStep (auto-incremented from the store), falls back
+  /// to the number the user entered in the Setup screen.
+  int get resolvedBuildNumber =>
+      (state['resolved_build_number'] as int?) ?? environment.buildNumber;
+
   String get versionLabel =>
-      '${environment.resolvedVersion}+${environment.buildNumber}';
+      '${environment.resolvedVersion}+$resolvedBuildNumber';
 }

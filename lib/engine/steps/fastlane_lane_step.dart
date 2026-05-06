@@ -38,7 +38,7 @@ class FastlaneLaneStep extends PipelineStep {
           '${env.distributionRules.playStore?.rolloutPercentage ?? 100}',
       'APPLE_TEAM_ID': env.iosConfig.teamId,
       'MATCH_APP_IDENTIFIER': env.iosBundleId,
-      'FL_BUILD_NUMBER': '${env.buildNumber}',
+      'FL_BUILD_NUMBER': '${ctx.resolvedBuildNumber}',
       'FL_VERSION_NUMBER': env.resolvedVersion,
       'RELEASE_NOTES': ctx.options.releaseNotes ?? '',
       'MANAGED_PUBLISHING': ctx.options.managedPublishing ? 'true' : 'false',

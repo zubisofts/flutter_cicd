@@ -49,7 +49,7 @@ class IosArchiveStep extends PipelineStep {
         '--release',
         '--export-method=$exportMethod',
         '--build-name=${env.resolvedVersion}',
-        '--build-number=${env.buildNumber}',
+        '--build-number=${ctx.resolvedBuildNumber}',
         if (scheme.isNotEmpty) '--flavor=$scheme',
         if (useDefineFromFile)
           '--dart-define-from-file=${env.dartDefineFromFile}'
