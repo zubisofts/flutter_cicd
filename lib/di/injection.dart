@@ -8,6 +8,7 @@ import '../engine/pipeline_runner.dart';
 import '../engine/step_registry.dart';
 import '../services/credential_store.dart';
 import '../services/email_notification_service.dart';
+import '../services/firestore_sync_service.dart';
 import '../services/google_chat_notification_service.dart';
 import '../services/slack_notification_service.dart';
 import '../services/teams_notification_service.dart';
@@ -55,11 +56,15 @@ void setupDependencies({required ThemeService themeService}) {
       registry: getIt<StepRegistry>(),
     ),
   );
+  getIt.registerLazySingleton<FirestoreSyncService>(
+    () => FirestoreSyncService(getIt<CredentialStore>()),
+  );
   getIt.registerLazySingleton<BuildQueue>(
     () => BuildQueue(
       configRepo: getIt<ConfigRepository>(),
       envResolver: getIt<EnvironmentResolver>(),
       repo: getIt<RunRepository>(),
+      firestoreSync: getIt<FirestoreSyncService>(),
     ),
   );
 

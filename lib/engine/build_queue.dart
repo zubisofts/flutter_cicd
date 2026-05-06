@@ -5,6 +5,7 @@ import '../config/environment_resolver.dart';
 import '../config/models/pipeline_definition.dart';
 import '../data/run_repository.dart';
 import '../execution/log_line.dart';
+import '../services/firestore_sync_service.dart';
 import 'pipeline_runner.dart';
 import 'step_result.dart';
 import 'step_state.dart';
@@ -135,9 +136,9 @@ class ActiveBuild {
 
   String get displayLabel => '${request.projectName} › ${request.envName}';
 
-  bool get _isStoreBuild =>
-      request.targets.contains('testflight') ||
-      request.targets.contains('playstore');
+  // Only TestFlight hides the build number — iOS uses auto-resolved number.
+  // Android (Play Store) always uses the manually entered number so we show it.
+  bool get _isStoreBuild => request.targets.contains('testflight');
 
   String get versionLabel => _isStoreBuild
       ? request.versionName
@@ -152,6 +153,7 @@ class BuildQueue {
   final ConfigRepository _configRepo;
   final EnvironmentResolver _envResolver;
   final RunRepository _repo;
+  final FirestoreSyncService? _firestoreSync;
 
   final List<ActiveBuild> _builds = [];
   final _listController = StreamController<List<ActiveBuild>>.broadcast();
@@ -161,9 +163,11 @@ class BuildQueue {
     required ConfigRepository configRepo,
     required EnvironmentResolver envResolver,
     required RunRepository repo,
+    FirestoreSyncService? firestoreSync,
   })  : _configRepo = configRepo,
         _envResolver = envResolver,
-        _repo = repo;
+        _repo = repo,
+        _firestoreSync = firestoreSync;
 
   Stream<List<ActiveBuild>> get stream => _listController.stream;
   List<ActiveBuild> get builds => List.unmodifiable(_builds);
@@ -298,15 +302,18 @@ class BuildQueue {
 
   void _persistRun(ActiveBuild build, PipelineRunResult result) async {
     if (result.runId.isEmpty) return;
+    final req = build.request;
+    final stepNames = {for (final s in build.steps) s.stepId: s.stepName};
+
+    // ── Local SQLite ────────────────────────────────────────────────────────
     try {
-      final req = build.request;
       await _repo.createRun(
         id: result.runId,
         projectId: req.projectId,
         projectName: req.projectName,
         envName: req.envName,
         branch: req.branch,
-        versionLabel: '${req.versionName}+${req.buildNumber}',
+        versionLabel: build.versionLabel,
         platforms: req.platforms,
         targets: req.targets,
       );
@@ -316,8 +323,6 @@ class BuildQueue {
         duration: result.totalDuration,
         errorMessage: result.errorMessage,
       );
-      // Use pre-populated step display names; fall back to step ID if missing.
-      final stepNames = {for (final s in build.steps) s.stepId: s.stepName};
       for (final entry in result.stepResults.entries) {
         final sr = entry.value;
         await _repo.recordStep(
@@ -330,6 +335,37 @@ class BuildQueue {
         );
       }
     } catch (_) {}
+
+    // ── Firestore sync (best-effort) ────────────────────────────────────────
+    if (_firestoreSync != null) {
+      final steps = result.stepResults.entries.map((e) {
+        final sr = e.value;
+        return StepSyncRecord(
+          stepId: e.key,
+          stepName: stepNames[e.key] ?? e.key,
+          status: sr.status.name,
+          durationSeconds: sr.duration?.inSeconds ?? 0,
+          errorMessage: sr.errorMessage,
+        );
+      }).toList();
+
+      _firestoreSync.syncRun(
+        runId: result.runId,
+        projectId: req.projectId,
+        projectName: req.projectName,
+        envName: req.envName,
+        branch: req.branch,
+        versionLabel: build.versionLabel,
+        platforms: req.platforms,
+        targets: req.targets,
+        startedAt: build.startedAt ?? build.queuedAt,
+        finishedAt: build.completedAt ?? DateTime.now(),
+        success: result.success,
+        durationSeconds: result.totalDuration.inSeconds,
+        errorMessage: result.errorMessage,
+        steps: steps,
+      );
+    }
   }
 
   void _emitList() {

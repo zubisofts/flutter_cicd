@@ -211,8 +211,9 @@ class SetupState extends Equatable {
         managedPublishing: managedPublishing ?? this.managedPublishing,
       );
 
-  bool get isAutoBuildNumber =>
-      targets.contains('testflight') || targets.contains('playstore');
+  // Only iOS TestFlight auto-resolves the build number.
+  // Android always uses the manually entered value.
+  bool get isAutoBuildNumber => targets.contains('testflight');
 
   String get versionPreview {
     final suffix = selectedEnv == 'dev' ? '-dev' : '';

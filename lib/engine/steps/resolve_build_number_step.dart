@@ -1,24 +1,22 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
-import 'package:googleapis_auth/auth_io.dart' as gauth;
-import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
 import '../pipeline_context.dart';
 import '../step_result.dart';
 import '../../execution/log_line.dart';
 import '../../execution/process_runner.dart';
 import 'pipeline_step.dart';
 
-/// Queries the latest build number from TestFlight (iOS) and/or Play Store
-/// (Android), takes the max across both, increments by 1, and stores the
-/// result in ctx.state['resolved_build_number'].
+/// Queries the latest TestFlight build number for iOS and auto-increments it.
 ///
-/// Only runs when targets include 'testflight' or 'playstore' — dev/staging
-/// Firebase-only runs skip it and use the manual build number unchanged.
+/// Android always uses the manually entered build number — this step does
+/// nothing for Android-only or Firebase-only runs.
 ///
-/// iOS:     Fastfile lane (needs app_store_connect_api_key + latest_testflight_build_number).
-/// Android: Direct Google Play Developer API call using the service account JSON —
-///          no fastlane supply involved, so authentication and track listing are reliable.
+/// Writes ctx.state['resolved_build_number'] which is then read by flutter
+/// build and archive steps. Also persists the resolved number locally
+/// (~/.cicd/projects/{id}/build_counters.json) so that builds discarded from
+/// TestFlight still act as a floor on the next run.
 class ResolveBuildNumberStep extends PipelineStep {
   final ProcessRunner _runner;
 
@@ -34,19 +32,16 @@ class ResolveBuildNumberStep extends PipelineStep {
     final queryIos = platforms.contains('ios') &&
         targets.contains('testflight') &&
         env.iosBundleId.isNotEmpty;
-    final queryAndroid = platforms.contains('android') &&
-        targets.contains('playstore') &&
-        env.androidPackageName.isNotEmpty;
 
-    if (!queryIos && !queryAndroid) {
+    if (!queryIos) {
       ctx.logSink.addRaw(id, LogLevel.info,
-          'No store targets — using build number from setup: '
+          'No TestFlight target — using build number from setup: '
           '${ctx.options.buildNumber}');
       return StepResult.success();
     }
 
     ctx.logSink.addRaw(
-        id, LogLevel.info, 'Auto-resolving build number from app stores...');
+        id, LogLevel.info, 'Auto-resolving iOS build number from TestFlight...');
 
     final shellEnv = {
       ...env.shellEnv,
@@ -55,56 +50,42 @@ class ResolveBuildNumberStep extends PipelineStep {
       'BUNDLE_ID': env.iosBundleId,
     };
 
+    final localCounters = await _readLocalCounters(ctx.projectId);
+    final localIosMax = localCounters['ios'] as int? ?? 0;
+
     try {
-      int? iosBuild;
-      int? androidBuild;
+      final apiResult = await _resolveIos(ctx, shellEnv);
+      final int iosBuild;
 
-      if (queryIos) {
-        final n = await _resolveIos(ctx, shellEnv);
-        if (n != null) {
-          iosBuild = n;
-          ctx.logSink.addRaw(id, LogLevel.info, 'TestFlight latest build: $iosBuild');
-        } else {
-          ctx.logSink.addRaw(id, LogLevel.warning,
-              'iOS build number query returned no result — '
-              'using manual build number: ${ctx.options.buildNumber}');
-          return StepResult.success();
-        }
+      if (apiResult != null) {
+        iosBuild = max(apiResult, localIosMax);
+        ctx.logSink.addRaw(id, LogLevel.info,
+            'TestFlight latest build: $apiResult'
+            '${iosBuild > apiResult ? " (local floor: $iosBuild)" : ""}');
+      } else if (localIosMax > 0) {
+        iosBuild = localIosMax;
+        ctx.logSink.addRaw(id, LogLevel.info,
+            'TestFlight query failed — using local history floor: $iosBuild');
+      } else {
+        ctx.logSink.addRaw(id, LogLevel.warning,
+            'TestFlight query returned no result and no local history — '
+            'using manual build number: ${ctx.options.buildNumber}');
+        return StepResult.success();
       }
 
-      if (queryAndroid) {
-        final n = await _resolveAndroid(
-          ctx,
-          env.shellEnv['PLAY_STORE_JSON_KEY'] ?? '',
-          env.androidPackageName,
-        );
-        if (n != null) {
-          androidBuild = n;
-          ctx.logSink.addRaw(id, LogLevel.info, 'Play Store max version code: $androidBuild');
-        } else {
-          ctx.logSink.addRaw(id, LogLevel.warning,
-              'Android build number query returned no result — '
-              'using manual build number: ${ctx.options.buildNumber}');
-          return StepResult.success();
-        }
-      }
-
-      final knownBuilds = [?iosBuild, ?androidBuild];
-      final next = knownBuilds.reduce(max) + 1;
+      final next = iosBuild + 1;
       ctx.state['resolved_build_number'] = next;
-      ctx.logSink.addRaw(id, LogLevel.success,
-          'Next build number: $next '
-          '(iOS latest: ${iosBuild ?? "-"}, Android latest: ${androidBuild ?? "-"})');
+      ctx.logSink.addRaw(
+          id, LogLevel.success, 'Next iOS build number: $next (latest: $iosBuild)');
 
-      return StepResult.success(metadata: {
-        'build_number': next,
-        if (iosBuild != null) 'ios_latest': iosBuild,
-        if (androidBuild != null) 'android_latest': androidBuild,
-      });
+      final updated = Map<String, dynamic>.from(localCounters)..['ios'] = next;
+      await _writeLocalCounters(ctx.projectId, updated);
+
+      return StepResult.success(metadata: {'build_number': next, 'ios_latest': iosBuild});
     } catch (e) {
       ctx.logSink.addRaw(id, LogLevel.warning,
           'Build number resolution failed ($e) — '
-          'using build number from setup: ${ctx.options.buildNumber}');
+          'using manual build number: ${ctx.options.buildNumber}');
       return StepResult.success();
     }
   }
@@ -115,7 +96,7 @@ class ResolveBuildNumberStep extends PipelineStep {
       PipelineContext ctx, Map<String, String> shellEnv) async {
     if ((shellEnv['ASC_KEY_ID'] ?? '').isEmpty) {
       ctx.logSink.addRaw(id, LogLevel.warning,
-          'ASC API key not configured — skipping iOS build number query');
+          'ASC API key not configured — skipping TestFlight build number query');
       return null;
     }
 
@@ -140,109 +121,30 @@ class ResolveBuildNumberStep extends PipelineStep {
     }
   }
 
-  // ── Android — Google Play Developer API (edits endpoint) ────────────────
-  // Uses the edits API rather than top-level tracks because the edits API
-  // includes in-progress and draft releases that have already consumed version
-  // codes — exactly what fastlane supply queries internally.
+  // ── Local build-number tracking ──────────────────────────────────────────
 
-  Future<int?> _resolveAndroid(
-      PipelineContext ctx, String jsonKeyPath, String packageName) async {
-    if (jsonKeyPath.isEmpty) {
-      ctx.logSink.addRaw(id, LogLevel.warning,
-          'Play Store JSON key not configured — skipping Android build number query');
-      return null;
-    }
+  String _countersPath(String projectId) {
+    final home = Platform.environment['HOME'] ?? '/tmp';
+    return p.join(home, '.cicd', 'projects', projectId, 'build_counters.json');
+  }
 
-    final keyContent = await File(jsonKeyPath).readAsString();
-    final credentials = gauth.ServiceAccountCredentials.fromJson(keyContent);
-    final authClient = await gauth.clientViaServiceAccount(
-      credentials,
-      ['https://www.googleapis.com/auth/androidpublisher'],
-      baseClient: http.Client(),
-    );
-
+  Future<Map<String, dynamic>> _readLocalCounters(String projectId) async {
     try {
-      final base =
-          'https://androidpublisher.googleapis.com/androidpublisher/v3/applications/$packageName/edits';
-
-      // 1. Create a temporary edit.
-      final insertResp = await authClient.post(
-        Uri.parse(base),
-        headers: {'Content-Type': 'application/json'},
-        body: '{}',
-      );
-      if (insertResp.statusCode != 200) {
-        final snippet = insertResp.body.length > 500
-            ? insertResp.body.substring(0, 500)
-            : insertResp.body;
-        ctx.logSink.addRaw(id, LogLevel.warning,
-            'Play Store edits.insert error ${insertResp.statusCode}: $snippet');
-        return null;
-      }
-
-      final editId =
-          (jsonDecode(insertResp.body) as Map<String, dynamic>)['id'] as String?;
-      if (editId == null || editId.isEmpty) {
-        ctx.logSink.addRaw(
-            id, LogLevel.warning, 'Play Store edits.insert returned no editId');
-        return null;
-      }
-
-      ctx.logSink.addRaw(id, LogLevel.info, 'Play Store edit created: $editId');
-
-      try {
-        // 2. List all tracks within the edit.
-        final tracksResp = await authClient
-            .get(Uri.parse('$base/$editId/tracks'));
-
-        if (tracksResp.statusCode != 200) {
-          final snippet = tracksResp.body.length > 500
-              ? tracksResp.body.substring(0, 500)
-              : tracksResp.body;
-          ctx.logSink.addRaw(id, LogLevel.warning,
-              'Play Store edits.tracks.list error ${tracksResp.statusCode}: $snippet');
-          return null;
-        }
-
-        final data = jsonDecode(tracksResp.body) as Map<String, dynamic>;
-        final tracks = data['tracks'] as List? ?? [];
-
-        int maxCode = 0;
-        for (final track in tracks) {
-          final trackName = track['track'] as String? ?? '';
-          final releases = track['releases'] as List? ?? [];
-          for (final release in releases) {
-            final codes = release['versionCodes'] as List? ?? [];
-            for (final code in codes) {
-              final n = int.tryParse(code.toString()) ?? 0;
-              if (n > maxCode) {
-                maxCode = n;
-                ctx.logSink.addRaw(
-                    id, LogLevel.info, 'Play Store track "$trackName": $n');
-              }
-            }
-          }
-        }
-
-        if (maxCode == 0) {
-          ctx.logSink.addRaw(id, LogLevel.warning,
-              'Play Store edits.tracks.list returned no version codes');
-          return null;
-        }
-
-        return maxCode;
-      } finally {
-        // 3. Always delete the temporary edit — we must not leave it open.
-        try {
-          await authClient.delete(Uri.parse('$base/$editId'));
-        } catch (_) {}
-      }
-    } catch (e) {
-      ctx.logSink.addRaw(id, LogLevel.warning, 'Play Store query failed: $e');
-      return null;
-    } finally {
-      authClient.close();
+      final file = File(_countersPath(projectId));
+      if (!await file.exists()) return {};
+      return jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+    } catch (_) {
+      return {};
     }
+  }
+
+  Future<void> _writeLocalCounters(
+      String projectId, Map<String, dynamic> counters) async {
+    try {
+      final file = File(_countersPath(projectId));
+      await file.parent.create(recursive: true);
+      await file.writeAsString(jsonEncode(counters));
+    } catch (_) {}
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────
