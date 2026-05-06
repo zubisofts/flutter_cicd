@@ -9,6 +9,7 @@ import 'steps/firebase_distribute_step.dart';
 import 'steps/fastlane_lane_step.dart';
 import 'steps/flutter_test_step.dart';
 import 'steps/ios_archive_step.dart';
+import 'steps/resolve_build_number_step.dart';
 import 'steps/shell_script_step.dart';
 
 typedef StepFactory = PipelineStep Function(StepDefinition definition);
@@ -37,6 +38,7 @@ class StepRegistry {
     final r = StepRegistry();
     r.register('preflight_check', (d) => PreflightCheckStep(d));
     r.register('git_checkout', (d) => GitCheckoutStep(d));
+    r.register('resolve_build_number', (d) => ResolveBuildNumberStep(d));
     r.register('set_version', (d) => SetVersionStep(d));
     r.register('flutter_pub_get', (d) => FlutterPubGetStep(d));
     r.register('flutter_build', (d) => FlutterBuildStep(d));
