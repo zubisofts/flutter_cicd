@@ -193,9 +193,7 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
     emit(
       state.copyWith(
         selectedRun: run,
-        selectedSteps: steps
-            .where((step) => step.statusIndex != StepStatus.skipped.index)
-            .toList(),
+        selectedSteps: steps,
       ),
     );
 

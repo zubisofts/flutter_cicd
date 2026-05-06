@@ -579,6 +579,7 @@ class _VersionSectionState extends State<_VersionSection> {
     return SectionCard(
       title: 'VERSION',
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             flex: 3,
