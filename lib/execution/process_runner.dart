@@ -17,31 +17,53 @@ class ProcessResult {
   });
 }
 
-/// Resolves the user's shell PATH by running `zsh -ilc echo $PATH`.
-/// GUI apps on macOS inherit a minimal /usr/bin PATH, not the user's
-/// shell PATH, so flutter/fastlane/firebase won't be found without this.
-Future<String> _resolveShellPath() async {
+/// Shell environment vars captured from the user's interactive login shell.
+/// GUI apps on macOS inherit a minimal environment from launchd — not the
+/// user's full shell session — so PATH, SSH_AUTH_SOCK, etc. are missing.
+class _ShellEnv {
+  final String path;
+  final String? sshAuthSock;
+  const _ShellEnv({required this.path, this.sshAuthSock});
+}
+
+Future<_ShellEnv> _resolveShellEnv() async {
+  const fallbackPath = '/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:'
+      '/usr/sbin:/sbin';
   try {
+    // Print PATH and SSH_AUTH_SOCK separated by a NUL so we can split safely
+    // even if either value contains newlines (PATH sometimes does on broken configs).
     final result = await Process.run(
       '/bin/zsh',
-      ['-ilc', 'echo \$PATH'],
+      ['-ilc', r'printf "%s\0%s" "$PATH" "$SSH_AUTH_SOCK"'],
       stdoutEncoding: utf8,
       stderrEncoding: utf8,
     );
-    final path = (result.stdout as String).trim().split('\n').last.trim();
-    if (path.isNotEmpty) return path;
+    // zsh -il may emit shell init noise before our printf; take the last line.
+    final raw = (result.stdout as String).trim().split('\n').last.trim();
+    final parts = raw.split('\x00');
+    final path = parts.isNotEmpty && parts[0].isNotEmpty ? parts[0] : fallbackPath;
+    final sock = parts.length > 1 && parts[1].isNotEmpty ? parts[1] : null;
+    return _ShellEnv(path: path, sshAuthSock: sock);
   } catch (_) {}
-  // Fallback: common tool locations
-  return '/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:'
-      '/usr/sbin:/sbin:${Platform.environment['HOME']}/flutter/bin:'
-      '${Platform.environment['PATH'] ?? ''}';
+  return _ShellEnv(
+    path: '$fallbackPath:${Platform.environment['HOME'] ?? ''}/flutter/bin:'
+        '${Platform.environment['PATH'] ?? ''}',
+  );
 }
 
-String? _cachedPath;
+_ShellEnv? _cachedShellEnv;
 
-Future<String> _shellPath() async {
-  _cachedPath ??= await _resolveShellPath();
-  return _cachedPath!;
+Future<_ShellEnv> _shellEnv() async {
+  _cachedShellEnv ??= await _resolveShellEnv();
+  return _cachedShellEnv!;
+}
+
+/// Returns the SSH_AUTH_SOCK from the user's interactive shell, if available.
+/// Useful for bare [Process.run] calls that bypass [ProcessRunner].
+Future<Map<String, String>> sshAgentEnv() async {
+  final env = await _shellEnv();
+  if (env.sshAuthSock != null) return {'SSH_AUTH_SOCK': env.sshAuthSock!};
+  return {};
 }
 
 /// Cache of resolved executable paths (e.g. 'fastlane' → '/opt/homebrew/bin/fastlane').
@@ -85,12 +107,18 @@ class ProcessRunner {
     /// and [PipelineAbortedException] is thrown.
     Future<void>? cancelSignal,
   }) async {
-    // Merge: resolved shell PATH takes precedence over the app's inherited PATH
-    final shellPath = await _shellPath();
+    // Merge platform env with shell env. The user's interactive zsh session
+    // knows PATH, SSH_AUTH_SOCK, etc. — GUI apps launched from Finder/Dock
+    // don't inherit these, so git (and other tools) fail to find SSH keys.
+    final shell = await _shellEnv();
     final mergedEnv = {
       ...Platform.environment,
       ...environment,
-      'PATH': shellPath,
+      'PATH': shell.path,
+      // Forward the SSH agent socket so git can authenticate over SSH.
+      // Caller-supplied environment takes precedence if already set.
+      if (shell.sshAuthSock != null && !environment.containsKey('SSH_AUTH_SOCK'))
+        'SSH_AUTH_SOCK': shell.sshAuthSock!,
     };
 
     // Resolve the executable to an absolute path using the shell so that tools
@@ -114,10 +142,10 @@ class ProcessRunner {
     }
 
     // Register abort handler AFTER process starts so proc is always valid.
-    bool _killedByAbort = false;
+    bool killedByAbort = false;
     if (cancelSignal != null) {
       cancelSignal.then((_) {
-        _killedByAbort = true;
+        killedByAbort = true;
         try { proc.kill(ProcessSignal.sigterm); } catch (_) {}
         // Hard-kill if still alive after 5 s
         Future<void>.delayed(const Duration(seconds: 5), () {
@@ -183,7 +211,7 @@ class ProcessRunner {
       rethrow;
     }
 
-    if (_killedByAbort) throw const PipelineAbortedException();
+    if (killedByAbort) throw const PipelineAbortedException();
 
     return ProcessResult(
       exitCode: exitCode,
