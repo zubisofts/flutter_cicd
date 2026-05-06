@@ -576,7 +576,6 @@ class _VersionSectionState extends State<_VersionSection> {
   @override
   Widget build(BuildContext context) {
     final bloc = context.read<SetupBloc>();
-    final isAuto = widget.state.isAutoBuildNumber;
     return SectionCard(
       title: 'VERSION',
       child: Row(
@@ -594,73 +593,26 @@ class _VersionSectionState extends State<_VersionSection> {
             ),
           ),
           const Gap(12),
-          if (isAuto)
-            Expanded(
-              flex: 2,
-              child: _AutoBuildNumberBadge(),
-            )
-          else
-            Expanded(
-              flex: 2,
-              child: TextField(
-                controller: _buildCtrl,
-                style: const TextStyle(fontSize: 13),
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Build number',
-                  hintText: '1',
-                ),
-                onChanged: (v) => bloc.add(BuildNumberChanged(v)),
+          Expanded(
+            flex: 2,
+            child: TextField(
+              controller: _buildCtrl,
+              style: const TextStyle(fontSize: 13),
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Build number',
+                hintText: '1',
+                helperText: widget.state.isAutoBuildNumber ? 'iOS: auto' : null,
               ),
+              onChanged: (v) => bloc.add(BuildNumberChanged(v)),
             ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _AutoBuildNumberBadge extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Build number',
-          style: TextStyle(
-            fontSize: 12,
-            color: cs.onSurfaceVariant,
-          ),
-        ),
-        const Gap(6),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: cs.primary.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.auto_awesome, size: 12, color: cs.primary),
-              const Gap(5),
-              Text(
-                'Auto',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: cs.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 class _PlatformSection extends StatelessWidget {
   final SetupState state;
