@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -553,16 +554,65 @@ class _BuildDetail extends StatelessWidget {
   }
 }
 
-class _DetailHeader extends StatelessWidget {
+class _DetailHeader extends StatefulWidget {
   final ActiveBuild activeBuild;
   final VoidCallback onCancel;
 
   const _DetailHeader({required this.activeBuild, required this.onCancel});
 
   @override
+  State<_DetailHeader> createState() => _DetailHeaderState();
+}
+
+class _DetailHeaderState extends State<_DetailHeader> {
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _startTickerIfNeeded();
+  }
+
+  @override
+  void didUpdateWidget(_DetailHeader old) {
+    super.didUpdateWidget(old);
+    _startTickerIfNeeded();
+  }
+
+  void _startTickerIfNeeded() {
+    final isRunning = widget.activeBuild.status == ActiveBuildStatus.running;
+    if (isRunning && _ticker == null) {
+      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+        if (widget.activeBuild.status != ActiveBuildStatus.running) {
+          _ticker?.cancel();
+          _ticker = null;
+        }
+      });
+    } else if (!isRunning) {
+      _ticker?.cancel();
+      _ticker = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final activeBuild = widget.activeBuild;
     final canCancel = activeBuild.status == ActiveBuildStatus.running ||
         activeBuild.status == ActiveBuildStatus.pending;
+
+    final elapsed = activeBuild.status == ActiveBuildStatus.running &&
+            activeBuild.startedAt != null
+        ? DateTime.now().difference(activeBuild.startedAt!)
+        : (activeBuild.completedAt != null && activeBuild.startedAt != null
+            ? activeBuild.completedAt!.difference(activeBuild.startedAt!)
+            : null);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -585,9 +635,22 @@ class _DetailHeader extends StatelessWidget {
             ],
           ),
           const Spacer(),
+          if (elapsed != null) ...[
+            Text(
+              _fmtDuration(elapsed),
+              style: TextStyle(
+                color: activeBuild.status == ActiveBuildStatus.running
+                    ? AppTheme.colorRunning
+                    : const Color(0xFF8B949E),
+                fontSize: 12,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+            const Gap(12),
+          ],
           if (canCancel)
             OutlinedButton.icon(
-              onPressed: onCancel,
+              onPressed: widget.onCancel,
               icon: const Icon(Icons.stop, size: 14),
               label: Text(
                 activeBuild.status == ActiveBuildStatus.pending
@@ -624,6 +687,15 @@ class _DetailHeader extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _fmtDuration(Duration d) {
+    final h = d.inHours;
+    final m = d.inMinutes % 60;
+    final s = d.inSeconds % 60;
+    if (h > 0) return '${h}h ${m}m ${s}s';
+    if (m > 0) return '${m}m ${s}s';
+    return '${s}s';
   }
 }
 

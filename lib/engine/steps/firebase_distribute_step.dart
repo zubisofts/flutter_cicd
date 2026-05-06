@@ -102,8 +102,12 @@ class FirebaseDistributeStep extends PipelineStep {
     return await distribute();
   }
 
-  String _buildReleaseNotes(PipelineContext ctx) =>
-      'Build ${ctx.versionLabel} | '
-      '${ctx.options.branch} | '
-      '${ctx.environment.displayName}';
+  String _buildReleaseNotes(PipelineContext ctx) {
+    final userNotes = ctx.options.releaseNotes;
+    final autoTag = 'Build ${ctx.versionLabel} | '
+        '${ctx.options.branch} | '
+        '${ctx.environment.displayName}';
+    if (userNotes != null && userNotes.isNotEmpty) return userNotes;
+    return autoTag;
+  }
 }
