@@ -56,33 +56,50 @@ class ResolveBuildNumberStep extends PipelineStep {
     };
 
     try {
-      int iosBuild = 0;
-      int androidBuild = 0;
+      int? iosBuild;
+      int? androidBuild;
 
       if (queryIos) {
-        iosBuild = await _resolveIos(ctx, shellEnv);
-        ctx.logSink.addRaw(id, LogLevel.info, 'TestFlight latest build: $iosBuild');
+        final n = await _resolveIos(ctx, shellEnv);
+        if (n != null) {
+          iosBuild = n;
+          ctx.logSink.addRaw(id, LogLevel.info, 'TestFlight latest build: $iosBuild');
+        } else {
+          ctx.logSink.addRaw(id, LogLevel.warning,
+              'iOS build number query returned no result — '
+              'using manual build number: ${ctx.options.buildNumber}');
+          return StepResult.success();
+        }
       }
 
       if (queryAndroid) {
-        androidBuild = await _resolveAndroid(
+        final n = await _resolveAndroid(
           ctx,
           env.shellEnv['PLAY_STORE_JSON_KEY'] ?? '',
           env.androidPackageName,
         );
-        ctx.logSink.addRaw(id, LogLevel.info, 'Play Store max version code: $androidBuild');
+        if (n != null) {
+          androidBuild = n;
+          ctx.logSink.addRaw(id, LogLevel.info, 'Play Store max version code: $androidBuild');
+        } else {
+          ctx.logSink.addRaw(id, LogLevel.warning,
+              'Android build number query returned no result — '
+              'using manual build number: ${ctx.options.buildNumber}');
+          return StepResult.success();
+        }
       }
 
-      final next = max(iosBuild, androidBuild) + 1;
+      final knownBuilds = [?iosBuild, ?androidBuild];
+      final next = knownBuilds.reduce(max) + 1;
       ctx.state['resolved_build_number'] = next;
       ctx.logSink.addRaw(id, LogLevel.success,
           'Next build number: $next '
-          '(iOS latest: $iosBuild, Android latest: $androidBuild)');
+          '(iOS latest: ${iosBuild ?? "-"}, Android latest: ${androidBuild ?? "-"})');
 
       return StepResult.success(metadata: {
         'build_number': next,
-        'ios_latest': iosBuild,
-        'android_latest': androidBuild,
+        if (iosBuild != null) 'ios_latest': iosBuild,
+        if (androidBuild != null) 'android_latest': androidBuild,
       });
     } catch (e) {
       ctx.logSink.addRaw(id, LogLevel.warning,
@@ -94,12 +111,12 @@ class ResolveBuildNumberStep extends PipelineStep {
 
   // ── iOS — Fastfile lane ─────────────────────────────────────────────────
 
-  Future<int> _resolveIos(
+  Future<int?> _resolveIos(
       PipelineContext ctx, Map<String, String> shellEnv) async {
     if ((shellEnv['ASC_KEY_ID'] ?? '').isEmpty) {
       ctx.logSink.addRaw(id, LogLevel.warning,
           'ASC API key not configured — skipping iOS build number query');
-      return 0;
+      return null;
     }
 
     final tempDir = await Directory.systemTemp.createTemp('cicd_resolve_ios_');
@@ -117,45 +134,77 @@ class ResolveBuildNumberStep extends PipelineStep {
         stepId: id,
         cancelSignal: ctx.abortSignal,
       );
-      return _parseMarker(result.output) ?? 0;
+      return _parseMarker(result.output);
     } finally {
       await tempDir.delete(recursive: true);
     }
   }
 
-  // ── Android — direct Google Play Developer API ──────────────────────────
+  // ── Android — Google Play Developer API (edits endpoint) ────────────────
+  // Uses the edits API rather than top-level tracks because the edits API
+  // includes in-progress and draft releases that have already consumed version
+  // codes — exactly what fastlane supply queries internally.
 
-  Future<int> _resolveAndroid(
+  Future<int?> _resolveAndroid(
       PipelineContext ctx, String jsonKeyPath, String packageName) async {
     if (jsonKeyPath.isEmpty) {
       ctx.logSink.addRaw(id, LogLevel.warning,
           'Play Store JSON key not configured — skipping Android build number query');
-      return 0;
+      return null;
     }
 
-    try {
-      final keyContent = await File(jsonKeyPath).readAsString();
-      final credentials = gauth.ServiceAccountCredentials.fromJson(keyContent);
-      final authClient = await gauth.clientViaServiceAccount(
-        credentials,
-        ['https://www.googleapis.com/auth/androidpublisher'],
-        baseClient: http.Client(),
-      );
-      try {
-        final uri = Uri.parse(
-          'https://www.googleapis.com/androidpublisher/v3/applications'
-          '/$packageName/tracks',
-        );
-        final response = await authClient.get(uri);
+    final keyContent = await File(jsonKeyPath).readAsString();
+    final credentials = gauth.ServiceAccountCredentials.fromJson(keyContent);
+    final authClient = await gauth.clientViaServiceAccount(
+      credentials,
+      ['https://www.googleapis.com/auth/androidpublisher'],
+      baseClient: http.Client(),
+    );
 
-        if (response.statusCode != 200) {
+    try {
+      final base =
+          'https://androidpublisher.googleapis.com/androidpublisher/v3/applications/$packageName/edits';
+
+      // 1. Create a temporary edit.
+      final insertResp = await authClient.post(
+        Uri.parse(base),
+        headers: {'Content-Type': 'application/json'},
+        body: '{}',
+      );
+      if (insertResp.statusCode != 200) {
+        final snippet = insertResp.body.length > 500
+            ? insertResp.body.substring(0, 500)
+            : insertResp.body;
+        ctx.logSink.addRaw(id, LogLevel.warning,
+            'Play Store edits.insert error ${insertResp.statusCode}: $snippet');
+        return null;
+      }
+
+      final editId =
+          (jsonDecode(insertResp.body) as Map<String, dynamic>)['id'] as String?;
+      if (editId == null || editId.isEmpty) {
+        ctx.logSink.addRaw(
+            id, LogLevel.warning, 'Play Store edits.insert returned no editId');
+        return null;
+      }
+
+      ctx.logSink.addRaw(id, LogLevel.info, 'Play Store edit created: $editId');
+
+      try {
+        // 2. List all tracks within the edit.
+        final tracksResp = await authClient
+            .get(Uri.parse('$base/$editId/tracks'));
+
+        if (tracksResp.statusCode != 200) {
+          final snippet = tracksResp.body.length > 500
+              ? tracksResp.body.substring(0, 500)
+              : tracksResp.body;
           ctx.logSink.addRaw(id, LogLevel.warning,
-              'Play Store API error ${response.statusCode}: '
-              '${response.body.length > 300 ? response.body.substring(0, 300) : response.body}');
-          return 0;
+              'Play Store edits.tracks.list error ${tracksResp.statusCode}: $snippet');
+          return null;
         }
 
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final data = jsonDecode(tracksResp.body) as Map<String, dynamic>;
         final tracks = data['tracks'] as List? ?? [];
 
         int maxCode = 0;
@@ -174,13 +223,25 @@ class ResolveBuildNumberStep extends PipelineStep {
             }
           }
         }
+
+        if (maxCode == 0) {
+          ctx.logSink.addRaw(id, LogLevel.warning,
+              'Play Store edits.tracks.list returned no version codes');
+          return null;
+        }
+
         return maxCode;
       } finally {
-        authClient.close();
+        // 3. Always delete the temporary edit — we must not leave it open.
+        try {
+          await authClient.delete(Uri.parse('$base/$editId'));
+        } catch (_) {}
       }
     } catch (e) {
       ctx.logSink.addRaw(id, LogLevel.warning, 'Play Store query failed: $e');
-      return 0;
+      return null;
+    } finally {
+      authClient.close();
     }
   }
 
