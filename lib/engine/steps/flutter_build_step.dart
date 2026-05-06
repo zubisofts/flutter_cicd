@@ -179,7 +179,7 @@ class FlutterBuildStep extends PipelineStep {
           artifact, // apk | appbundle
           '--release',
           '--build-name=${env.resolvedVersion}',
-          '--build-number=${env.buildNumber}',
+          '--build-number=${ctx.resolvedBuildNumber}',
           '--flavor=$androidFlavor',
           if (useDefineFromFile)
             '--dart-define-from-file=${env.dartDefineFromFile}'
@@ -197,7 +197,7 @@ class FlutterBuildStep extends PipelineStep {
           '--release',
           '--no-codesign',
           '--build-name=${env.resolvedVersion}',
-          '--build-number=${env.buildNumber}',
+          '--build-number=${ctx.resolvedBuildNumber}',
           '--flavor=$iosFlavor',
           if (useDefineFromFile)
             '--dart-define-from-file=${env.dartDefineFromFile}'
