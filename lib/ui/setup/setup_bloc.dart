@@ -211,9 +211,13 @@ class SetupState extends Equatable {
         managedPublishing: managedPublishing ?? this.managedPublishing,
       );
 
+  bool get isAutoBuildNumber =>
+      targets.contains('testflight') || targets.contains('playstore');
+
   String get versionPreview {
     final suffix = selectedEnv == 'dev' ? '-dev' : '';
-    return '$versionName$suffix+$buildNumber';
+    final base = '$versionName$suffix';
+    return isAutoBuildNumber ? base : '$base+$buildNumber';
   }
 
   @override
