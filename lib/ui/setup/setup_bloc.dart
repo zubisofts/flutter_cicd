@@ -217,8 +217,7 @@ class SetupState extends Equatable {
 
   String get versionPreview {
     final suffix = selectedEnv == 'dev' ? '-dev' : '';
-    final base = '$versionName$suffix';
-    return isAutoBuildNumber ? base : '$base+$buildNumber';
+    return '$versionName$suffix+$buildNumber';
   }
 
   @override
