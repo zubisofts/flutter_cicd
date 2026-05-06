@@ -5,6 +5,7 @@ import 'package:equatable/equatable.dart';
 import '../../config/config_repository.dart';
 import '../../config/models/app_project.dart';
 import '../../engine/pipeline_runner.dart';
+import '../../execution/process_runner.dart' show sshAgentEnv;
 
 // ─── Events ───────────────────────────────────────────────────────────────
 
@@ -483,11 +484,12 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
       add(const RefsFetched(branches: [], tags: []));
       return;
     }
-    Process.run(
+    sshAgentEnv().then((sshEnv) => Process.run(
       '/usr/bin/git',
       ['ls-remote', '--heads', '--tags', repoUrl],
+      environment: {...Platform.environment, ...sshEnv},
       runInShell: false,
-    ).timeout(const Duration(seconds: 15), onTimeout: () {
+    )).timeout(const Duration(seconds: 15), onTimeout: () {
       return ProcessResult(0, 1, '', 'timeout');
     }).then((result) {
       if (isClosed) return;
