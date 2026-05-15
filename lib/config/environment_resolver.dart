@@ -122,8 +122,7 @@ class EnvironmentResolver {
   static Future<void> cleanTempCredentials(String runId) async {
     final home = Platform.environment['HOME'];
     if (home == null) return;
-    final dir =
-        Directory(p.join(home, '.cicd', '.credentials', runId));
+    final dir = Directory(p.join(home, '.cicd', '.credentials', runId));
     if (await dir.exists()) {
       try {
         await dir.delete(recursive: true);
@@ -197,11 +196,13 @@ class EnvironmentResolver {
       // GIT_CONFIG_COUNT/KEY/VALUE are read by git ≥ 2.31 as extra config entries.
       if (gitHubToken.isNotEmpty) ...{
         'GIT_CONFIG_COUNT': '2',
-        // Rewrite SSH URLs: git@github.com:org/repo → https://oauth2:TOKEN@github.com/org/repo
-        'GIT_CONFIG_KEY_0': 'url.https://oauth2:$gitHubToken@github.com/.insteadOf',
+        // Rewrite SSH URLs: git@github.com:org/repo → authenticated HTTPS.
+        'GIT_CONFIG_KEY_0':
+            'url.https://x-access-token:$gitHubToken@github.com/.insteadOf',
         'GIT_CONFIG_VALUE_0': 'git@github.com:',
-        // Rewrite plain HTTPS URLs: https://github.com/ → https://oauth2:TOKEN@github.com/
-        'GIT_CONFIG_KEY_1': 'url.https://oauth2:$gitHubToken@github.com/.insteadOf',
+        // Rewrite plain HTTPS URLs: https://github.com/ → authenticated HTTPS.
+        'GIT_CONFIG_KEY_1':
+            'url.https://x-access-token:$gitHubToken@github.com/.insteadOf',
         'GIT_CONFIG_VALUE_1': 'https://github.com/',
       },
     };

@@ -107,9 +107,22 @@ class NewProjectRequested extends SetupEvent {
 class RefsFetched extends SetupEvent {
   final List<String> branches;
   final List<String> tags;
-  const RefsFetched({required this.branches, required this.tags});
+  final int requestId;
+  const RefsFetched({
+    required this.branches,
+    required this.tags,
+    required this.requestId,
+  });
   @override
-  List<Object?> get props => [branches.length, tags.length];
+  List<Object?> get props => [branches.length, tags.length, requestId];
+}
+
+class RefsFetchFailed extends SetupEvent {
+  final String message;
+  final int requestId;
+  const RefsFetchFailed(this.message, {required this.requestId});
+  @override
+  List<Object?> get props => [message, requestId];
 }
 
 // ─── States ───────────────────────────────────────────────────────────────
@@ -127,7 +140,9 @@ class SetupState extends Equatable {
   final List<String> branches;
   final List<String> tags;
   final bool isFetchingBranches;
-  final bool branchValid; // false only when refs loaded and typed value not found
+  final String? branchFetchMessage;
+  // False only when refs loaded and typed value is not found.
+  final bool branchValid;
   final bool isLoading;
   final String? error;
   final bool requiresProductionConfirm;
@@ -148,6 +163,7 @@ class SetupState extends Equatable {
     this.branches = const [],
     this.tags = const [],
     this.isFetchingBranches = false,
+    this.branchFetchMessage,
     this.branchValid = true,
     this.isLoading = false,
     this.error,
@@ -177,6 +193,7 @@ class SetupState extends Equatable {
     List<String>? branches,
     List<String>? tags,
     bool? isFetchingBranches,
+    String? branchFetchMessage,
     bool? branchValid,
     bool? isLoading,
     String? error,
@@ -185,31 +202,35 @@ class SetupState extends Equatable {
     String? releaseNotes,
     bool? managedPublishing,
     bool clearError = false,
+    bool clearBranchFetchMessage = false,
     bool clearProject = false,
-  }) =>
-      SetupState(
-        projects: projects ?? this.projects,
-        selectedProject:
-            clearProject ? null : (selectedProject ?? this.selectedProject),
-        availableEnvs: availableEnvs ?? this.availableEnvs,
-        selectedEnv: selectedEnv ?? this.selectedEnv,
-        branch: branch ?? this.branch,
-        versionName: versionName ?? this.versionName,
-        buildNumber: buildNumber ?? this.buildNumber,
-        platforms: platforms ?? this.platforms,
-        targets: targets ?? this.targets,
-        branches: branches ?? this.branches,
-        tags: tags ?? this.tags,
-        isFetchingBranches: isFetchingBranches ?? this.isFetchingBranches,
-        branchValid: branchValid ?? this.branchValid,
-        isLoading: isLoading ?? this.isLoading,
-        error: clearError ? null : (error ?? this.error),
-        requiresProductionConfirm:
-            requiresProductionConfirm ?? this.requiresProductionConfirm,
-        readyToRun: readyToRun ?? this.readyToRun,
-        releaseNotes: releaseNotes ?? this.releaseNotes,
-        managedPublishing: managedPublishing ?? this.managedPublishing,
-      );
+  }) => SetupState(
+    projects: projects ?? this.projects,
+    selectedProject: clearProject
+        ? null
+        : (selectedProject ?? this.selectedProject),
+    availableEnvs: availableEnvs ?? this.availableEnvs,
+    selectedEnv: selectedEnv ?? this.selectedEnv,
+    branch: branch ?? this.branch,
+    versionName: versionName ?? this.versionName,
+    buildNumber: buildNumber ?? this.buildNumber,
+    platforms: platforms ?? this.platforms,
+    targets: targets ?? this.targets,
+    branches: branches ?? this.branches,
+    tags: tags ?? this.tags,
+    isFetchingBranches: isFetchingBranches ?? this.isFetchingBranches,
+    branchFetchMessage: clearBranchFetchMessage
+        ? null
+        : (branchFetchMessage ?? this.branchFetchMessage),
+    branchValid: branchValid ?? this.branchValid,
+    isLoading: isLoading ?? this.isLoading,
+    error: clearError ? null : (error ?? this.error),
+    requiresProductionConfirm:
+        requiresProductionConfirm ?? this.requiresProductionConfirm,
+    readyToRun: readyToRun ?? this.readyToRun,
+    releaseNotes: releaseNotes ?? this.releaseNotes,
+    managedPublishing: managedPublishing ?? this.managedPublishing,
+  );
 
   // Only iOS TestFlight auto-resolves the build number.
   // Android always uses the manually entered value.
@@ -222,26 +243,27 @@ class SetupState extends Equatable {
 
   @override
   List<Object?> get props => [
-        projects,
-        selectedProject?.id,
-        availableEnvs,
-        selectedEnv,
-        branch,
-        versionName,
-        buildNumber,
-        platforms,
-        targets,
-        branches,
-        tags,
-        isFetchingBranches,
-        branchValid,
-        isLoading,
-        error,
-        requiresProductionConfirm,
-        readyToRun,
-        releaseNotes,
-        managedPublishing,
-      ];
+    projects,
+    selectedProject?.id,
+    availableEnvs,
+    selectedEnv,
+    branch,
+    versionName,
+    buildNumber,
+    platforms,
+    targets,
+    branches,
+    tags,
+    isFetchingBranches,
+    branchFetchMessage,
+    branchValid,
+    isLoading,
+    error,
+    requiresProductionConfirm,
+    readyToRun,
+    releaseNotes,
+    managedPublishing,
+  ];
 }
 
 // ─── BLoC ─────────────────────────────────────────────────────────────────
@@ -249,6 +271,7 @@ class SetupState extends Equatable {
 class SetupBloc extends Bloc<SetupEvent, SetupState> {
   final ConfigRepository _configRepo;
   final CredentialStore _credentials;
+  int _refsRequestId = 0;
 
   SetupBloc(this._configRepo, this._credentials) : super(const SetupState()) {
     on<SetupInitialized>(_onInit);
@@ -259,37 +282,62 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
     on<BuildNumberChanged>(_onBuildNumberChanged);
     on<PlatformToggled>(_onPlatformToggled);
     on<TargetToggled>(_onTargetToggled);
-    on<ReleaseNotesChanged>((e, emit) =>
-        emit(state.copyWith(releaseNotes: e.value)));
-    on<ManagedPublishingToggled>((_, emit) =>
-        emit(state.copyWith(managedPublishing: !state.managedPublishing)));
+    on<ReleaseNotesChanged>(
+      (e, emit) => emit(state.copyWith(releaseNotes: e.value)),
+    );
+    on<ManagedPublishingToggled>(
+      (_, emit) =>
+          emit(state.copyWith(managedPublishing: !state.managedPublishing)),
+    );
     on<RunPipelineRequested>(_onRunRequested);
     on<NewProjectRequested>(_onNewProject);
     on<ProjectDeleted>(_onProjectDeleted);
     on<RefsFetched>((e, emit) {
+      if (e.requestId != _refsRequestId) return;
       final allRefs = [...e.branches, ...e.tags];
       final valid = allRefs.isEmpty || allRefs.contains(state.branch);
-      emit(state.copyWith(
-        branches: e.branches,
-        tags: e.tags,
-        isFetchingBranches: false,
-        branchValid: valid,
-      ));
+      emit(
+        state.copyWith(
+          branches: e.branches,
+          tags: e.tags,
+          isFetchingBranches: false,
+          clearBranchFetchMessage: true,
+          branchValid: valid,
+          clearError: true,
+        ),
+      );
+    });
+    on<RefsFetchFailed>((e, emit) {
+      if (e.requestId != _refsRequestId) return;
+      emit(
+        state.copyWith(
+          branches: const [],
+          tags: const [],
+          isFetchingBranches: false,
+          branchFetchMessage: e.message,
+          branchValid: true,
+          error: e.message,
+        ),
+      );
     });
     on<ResetReadyToRun>((_, emit) => emit(state.copyWith(readyToRun: false)));
   }
 
-  Future<void> _onInit(
-      SetupInitialized event, Emitter<SetupState> emit) async {
+  Future<void> _onInit(SetupInitialized event, Emitter<SetupState> emit) async {
     emit(state.copyWith(isLoading: true));
     try {
       final projects = await _configRepo.listProjects();
-      emit(state.copyWith(
-        projects: projects,
-        isLoading: false,
-        selectedProject: projects.isNotEmpty ? projects.first : null,
-        isFetchingBranches: projects.isNotEmpty,
-      ));
+      emit(
+        state.copyWith(
+          projects: projects,
+          isLoading: false,
+          selectedProject: projects.isNotEmpty ? projects.first : null,
+          isFetchingBranches: projects.isNotEmpty,
+          branchFetchMessage: projects.isNotEmpty
+              ? 'Loading refs from ${projects.first.repository}...'
+              : null,
+        ),
+      );
       if (projects.isNotEmpty) {
         await _loadEnvs(projects.first.id, emit);
         await _applyLastRunConfig(projects.first.id, emit);
@@ -301,14 +349,19 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
   }
 
   Future<void> _onProjectSelected(
-      ProjectSelected event, Emitter<SetupState> emit) async {
-    emit(state.copyWith(
-      selectedProject: event.project,
-      branches: [],
-      tags: [],
-      isFetchingBranches: true,
-      clearError: true,
-    ));
+    ProjectSelected event,
+    Emitter<SetupState> emit,
+  ) async {
+    emit(
+      state.copyWith(
+        selectedProject: event.project,
+        branches: [],
+        tags: [],
+        isFetchingBranches: true,
+        branchFetchMessage: 'Loading refs from ${event.project.repository}...',
+        clearError: true,
+      ),
+    );
     await _loadEnvs(event.project.id, emit);
     await _applyLastRunConfig(event.project.id, emit);
     _fetchBranches(event.project.repository, projectId: event.project.id);
@@ -317,12 +370,15 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
   Future<void> _loadEnvs(String projectId, Emitter<SetupState> emit) async {
     try {
       final envs = await _configRepo.listEnvironments(projectId);
-      final selectedEnv =
-          envs.contains('dev') ? 'dev' : (envs.isNotEmpty ? envs.first : 'dev');
-      emit(state.copyWith(
-        availableEnvs: envs.isNotEmpty ? envs : ['dev', 'staging', 'prod'],
-        selectedEnv: selectedEnv,
-      ));
+      final selectedEnv = envs.contains('dev')
+          ? 'dev'
+          : (envs.isNotEmpty ? envs.first : 'dev');
+      emit(
+        state.copyWith(
+          availableEnvs: envs.isNotEmpty ? envs : ['dev', 'staging', 'prod'],
+          selectedEnv: selectedEnv,
+        ),
+      );
       await _syncTargetsFromEnv(projectId, selectedEnv, emit);
     } catch (_) {}
   }
@@ -331,7 +387,10 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
   /// actually enabled — so TestFlight, Firebase, Play Store are pre-selected
   /// without the user having to toggle them manually every run.
   Future<void> _syncTargetsFromEnv(
-      String projectId, String envName, Emitter<SetupState> emit) async {
+    String projectId,
+    String envName,
+    Emitter<SetupState> emit,
+  ) async {
     try {
       final envConfig = await _configRepo.loadEnv(projectId, envName);
       final dist = envConfig.distribution;
@@ -350,33 +409,41 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
   void _onBranchChanged(BranchChanged event, Emitter<SetupState> emit) {
     final allRefs = [...state.branches, ...state.tags];
     final valid = allRefs.isEmpty || allRefs.contains(event.branch);
-    emit(state.copyWith(
-        branch: event.branch, branchValid: valid, clearError: true));
+    emit(
+      state.copyWith(
+        branch: event.branch,
+        branchValid: valid,
+        clearError: true,
+      ),
+    );
   }
 
   Future<void> _onEnvSelected(
-      EnvSelected event, Emitter<SetupState> emit) async {
-    emit(state.copyWith(
-      selectedEnv: event.envName,
-      requiresProductionConfirm: event.envName == 'prod',
-      clearError: true,
-    ));
+    EnvSelected event,
+    Emitter<SetupState> emit,
+  ) async {
+    emit(
+      state.copyWith(
+        selectedEnv: event.envName,
+        requiresProductionConfirm: event.envName == 'prod',
+        clearError: true,
+      ),
+    );
     final projectId = state.selectedProject?.id;
     if (projectId != null) {
       await _syncTargetsFromEnv(projectId, event.envName, emit);
     }
   }
 
-  void _onVersionChanged(
-      VersionNameChanged event, Emitter<SetupState> emit) =>
+  void _onVersionChanged(VersionNameChanged event, Emitter<SetupState> emit) =>
       emit(state.copyWith(versionName: event.value, clearError: true));
 
   void _onBuildNumberChanged(
-      BuildNumberChanged event, Emitter<SetupState> emit) =>
-      emit(state.copyWith(buildNumber: event.value, clearError: true));
+    BuildNumberChanged event,
+    Emitter<SetupState> emit,
+  ) => emit(state.copyWith(buildNumber: event.value, clearError: true));
 
-  void _onPlatformToggled(
-      PlatformToggled event, Emitter<SetupState> emit) {
+  void _onPlatformToggled(PlatformToggled event, Emitter<SetupState> emit) {
     final list = List<String>.from(state.platforms);
     if (list.contains(event.platform)) {
       list.remove(event.platform);
@@ -397,7 +464,9 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
   }
 
   Future<void> _onRunRequested(
-      RunPipelineRequested event, Emitter<SetupState> emit) async {
+    RunPipelineRequested event,
+    Emitter<SetupState> emit,
+  ) async {
     final project = state.selectedProject;
     if (project != null) {
       _configRepo.saveLastRunConfig(project.id, {
@@ -413,47 +482,57 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
   }
 
   Future<void> _applyLastRunConfig(
-      String projectId, Emitter<SetupState> emit) async {
+    String projectId,
+    Emitter<SetupState> emit,
+  ) async {
     try {
       final config = await _configRepo.loadLastRunConfig(projectId);
       if (config == null) return;
 
       final savedEnv = config['selectedEnv'] as String?;
-      final envToApply = savedEnv != null &&
-              state.availableEnvs.contains(savedEnv)
+      final envToApply =
+          savedEnv != null && state.availableEnvs.contains(savedEnv)
           ? savedEnv
           : null;
 
-      emit(state.copyWith(
-        branch: config['branch'] as String? ?? state.branch,
-        versionName: config['versionName'] as String? ?? state.versionName,
-        buildNumber: config['buildNumber'] as String? ?? state.buildNumber,
-        selectedEnv: envToApply ?? state.selectedEnv,
-        platforms:
-            (config['platforms'] as List?)?.cast<String>() ?? state.platforms,
-        targets:
-            (config['targets'] as List?)?.cast<String>() ?? state.targets,
-        requiresProductionConfirm:
-            (envToApply ?? state.selectedEnv) == 'prod',
-      ));
+      emit(
+        state.copyWith(
+          branch: config['branch'] as String? ?? state.branch,
+          versionName: config['versionName'] as String? ?? state.versionName,
+          buildNumber: config['buildNumber'] as String? ?? state.buildNumber,
+          selectedEnv: envToApply ?? state.selectedEnv,
+          platforms:
+              (config['platforms'] as List?)?.cast<String>() ?? state.platforms,
+          targets:
+              (config['targets'] as List?)?.cast<String>() ?? state.targets,
+          requiresProductionConfirm:
+              (envToApply ?? state.selectedEnv) == 'prod',
+        ),
+      );
     } catch (_) {}
   }
 
   Future<void> _onNewProject(
-      NewProjectRequested event, Emitter<SetupState> emit) async {
+    NewProjectRequested event,
+    Emitter<SetupState> emit,
+  ) async {
     emit(state.copyWith(isLoading: true));
     try {
       await _configRepo.scaffold(event.id, event.name, event.repository);
       final projects = await _configRepo.listProjects();
       final newProject = projects.firstWhere((p) => p.id == event.id);
-      emit(state.copyWith(
-        projects: projects,
-        selectedProject: newProject,
-        branches: [],
-        isFetchingBranches: true,
-        isLoading: false,
-        clearError: true,
-      ));
+      emit(
+        state.copyWith(
+          projects: projects,
+          selectedProject: newProject,
+          branches: [],
+          tags: [],
+          isFetchingBranches: true,
+          isLoading: false,
+          branchFetchMessage: 'Loading refs from ${event.repository}...',
+          clearError: true,
+        ),
+      );
       await _loadEnvs(event.id, emit);
       _fetchBranches(event.repository, projectId: event.id);
     } catch (e) {
@@ -462,20 +541,27 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
   }
 
   Future<void> _onProjectDeleted(
-      ProjectDeleted event, Emitter<SetupState> emit) async {
+    ProjectDeleted event,
+    Emitter<SetupState> emit,
+  ) async {
     emit(state.copyWith(isLoading: true));
     try {
       await _configRepo.deleteProject(event.projectId);
       final projects = await _configRepo.listProjects();
-      emit(state.copyWith(
-        projects: projects,
-        isLoading: false,
-        clearProject: projects.isEmpty,
-        selectedProject: projects.isNotEmpty ? projects.first : null,
-        branches: [],
-        tags: [],
-        clearError: true,
-      ));
+      emit(
+        state.copyWith(
+          projects: projects,
+          isLoading: false,
+          clearProject: projects.isEmpty,
+          selectedProject: projects.isNotEmpty ? projects.first : null,
+          branches: [],
+          tags: [],
+          branchFetchMessage: projects.isNotEmpty
+              ? 'Loading refs from ${projects.first.repository}...'
+              : null,
+          clearError: true,
+        ),
+      );
       if (projects.isNotEmpty) {
         await _loadEnvs(projects.first.id, emit);
         _fetchBranches(projects.first.repository, projectId: projects.first.id);
@@ -486,72 +572,168 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
   }
 
   void _fetchBranches(String repoUrl, {String? projectId}) {
+    final requestId = ++_refsRequestId;
     if (repoUrl.isEmpty) {
-      add(const RefsFetched(branches: [], tags: []));
+      add(
+        RefsFetched(branches: const [], tags: const [], requestId: requestId),
+      );
       return;
     }
-    Future.wait([
+    _fetchRefs(repoUrl, projectId: projectId)
+        .then((fetch) {
+          if (isClosed) return;
+          final result = fetch.result;
+          if (result.exitCode != 0) {
+            add(
+              RefsFetchFailed(
+                _formatRefsError(result, details: fetch.details),
+                requestId: requestId,
+              ),
+            );
+            return;
+          }
+          final lines = (result.stdout as String)
+              .split('\n')
+              .where((l) => l.contains('\t'));
+
+          final branches =
+              lines
+                  .where((l) => l.contains('refs/heads/'))
+                  .map(
+                    (l) => l
+                        .split('\t')
+                        .last
+                        .replaceFirst('refs/heads/', '')
+                        .trim(),
+                  )
+                  .where((b) => b.isNotEmpty)
+                  .toList()
+                ..sort();
+
+          final tags =
+              lines
+                  .where((l) => l.contains('refs/tags/') && !l.endsWith('^{}'))
+                  .map(
+                    (l) => l
+                        .split('\t')
+                        .last
+                        .replaceFirst('refs/tags/', '')
+                        .trim(),
+                  )
+                  .where((t) => t.isNotEmpty)
+                  .toList()
+                ..sort();
+
+          add(
+            RefsFetched(branches: branches, tags: tags, requestId: requestId),
+          );
+        })
+        .catchError((e) {
+          if (isClosed) return;
+          add(
+            RefsFetchFailed(
+              'Failed to load repository refs: $e',
+              requestId: requestId,
+            ),
+          );
+        });
+  }
+
+  Future<_RefsFetchResult> _fetchRefs(
+    String repoUrl, {
+    String? projectId,
+  }) async {
+    final results = await Future.wait([
       sshAgentEnv(),
       if (projectId != null)
         _credentials.loadGitHubToken(projectId)
       else
         Future.value(''),
-    ]).then((results) {
-      final sshEnv = results[0] as Map<String, String>;
-      final token = results[1] as String;
-      final tokenEnv = token.isNotEmpty
-          ? {
-              'GIT_CONFIG_COUNT': '2',
-              'GIT_CONFIG_KEY_0':
-                  'url.https://oauth2:$token@github.com/.insteadOf',
-              'GIT_CONFIG_VALUE_0': 'git@github.com:',
-              'GIT_CONFIG_KEY_1':
-                  'url.https://oauth2:$token@github.com/.insteadOf',
-              'GIT_CONFIG_VALUE_1': 'https://github.com/',
-            }
-          : <String, String>{};
-      return Process.run(
-        '/usr/bin/git',
-        ['ls-remote', '--heads', '--tags', repoUrl],
-        environment: {...Platform.environment, ...sshEnv, ...tokenEnv},
-        runInShell: false,
-      );
-    }).timeout(const Duration(seconds: 15), onTimeout: () {
-      return ProcessResult(0, 1, '', 'timeout');
-    }).then((result) {
-      if (isClosed) return;
-      if (result.exitCode != 0) {
-        add(const RefsFetched(branches: [], tags: []));
-        return;
+    ]);
+    final sshEnv = results[0] as Map<String, String>;
+    final token = results[1] as String;
+    final tokenEnv = token.isNotEmpty
+        ? _githubTokenEnv(token)
+        : <String, String>{};
+
+    final env = {...Platform.environment, ...sshEnv};
+    final attempts = <String>[];
+    var result = await _runLsRemote(repoUrl, {...env, ...tokenEnv});
+    attempts.add(
+      _attemptSummary(
+        'configured URL${tokenEnv.isNotEmpty ? ' with token' : ''}',
+        repoUrl,
+        result,
+      ),
+    );
+
+    // If a stored token is stale, it can break an otherwise valid SSH URL or
+    // local credential-helper auth. Retry once without the token rewrite.
+    if (result.exitCode != 0 && tokenEnv.isNotEmpty) {
+      final httpsUrl = _githubHttpsUrl(repoUrl);
+      if (httpsUrl != repoUrl) {
+        result = await _runLsRemote(httpsUrl, {...env, ...tokenEnv});
+        attempts.add(_attemptSummary('HTTPS URL with token', httpsUrl, result));
       }
-      final lines = (result.stdout as String)
-          .split('\n')
-          .where((l) => l.contains('\t'));
+      if (result.exitCode != 0) {
+        result = await _runLsRemote(repoUrl, env);
+        attempts.add(
+          _attemptSummary('configured URL without token', repoUrl, result),
+        );
+      }
+    }
 
-      final branches = lines
-          .where((l) => l.contains('refs/heads/'))
-          .map((l) => l.split('\t').last
-              .replaceFirst('refs/heads/', '')
-              .trim())
-          .where((b) => b.isNotEmpty)
-          .toList()
-        ..sort();
-
-      final tags = lines
-          .where((l) => l.contains('refs/tags/') && !l.endsWith('^{}'))
-          .map((l) => l.split('\t').last
-              .replaceFirst('refs/tags/', '')
-              .trim())
-          .where((t) => t.isNotEmpty)
-          .toList()
-        ..sort();
-
-      add(RefsFetched(branches: branches, tags: tags));
-    }).catchError((_) {
-      if (isClosed) return;
-      add(const RefsFetched(branches: [], tags: []));
-    });
+    return _RefsFetchResult(result: result, details: attempts.join(' '));
   }
+
+  Future<ProcessResult> _runLsRemote(
+    String repoUrl,
+    Map<String, String> environment,
+  ) {
+    return Process.run(
+      '/usr/bin/git',
+      ['ls-remote', '--heads', '--tags', repoUrl],
+      environment: environment,
+      runInShell: false,
+    ).timeout(
+      const Duration(seconds: 30),
+      onTimeout: () {
+        return ProcessResult(0, 1, '', 'timeout loading refs');
+      },
+    );
+  }
+
+  Map<String, String> _githubTokenEnv(String token) => {
+    'GIT_CONFIG_COUNT': '2',
+    'GIT_CONFIG_KEY_0':
+        'url.https://x-access-token:$token@github.com/.insteadOf',
+    'GIT_CONFIG_VALUE_0': 'git@github.com:',
+    'GIT_CONFIG_KEY_1':
+        'url.https://x-access-token:$token@github.com/.insteadOf',
+    'GIT_CONFIG_VALUE_1': 'https://github.com/',
+  };
+
+  String _githubHttpsUrl(String repoUrl) {
+    if (!repoUrl.startsWith('git@github.com:')) return repoUrl;
+    return repoUrl.replaceFirst('git@github.com:', 'https://github.com/');
+  }
+
+  String _attemptSummary(String label, String repoUrl, ProcessResult result) {
+    final status = result.exitCode == 0 ? 'ok' : 'exit ${result.exitCode}';
+    return 'Tried $label ($repoUrl): $status.';
+  }
+
+  String _formatRefsError(ProcessResult result, {String details = ''}) {
+    final raw = '${result.stderr}'.trim().isNotEmpty
+        ? '${result.stderr}'.trim()
+        : '${result.stdout}'.trim();
+    final message = raw.isEmpty ? 'git exited with ${result.exitCode}' : raw;
+    final suffix = details.isEmpty ? '' : ' $details';
+    return 'Failed to load repository refs: ${_redactGitCredentials(message)}$suffix';
+  }
+
+  String _redactGitCredentials(String value) =>
+      value.replaceAll(RegExp(r'https://[^/@\s]+:[^/@\s]+@'), 'https://***@');
 
   RunRequest buildRunRequest() {
     return RunRequest(
@@ -567,4 +749,11 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
       managedPublishing: state.managedPublishing,
     );
   }
+}
+
+class _RefsFetchResult {
+  final ProcessResult result;
+  final String details;
+
+  const _RefsFetchResult({required this.result, required this.details});
 }

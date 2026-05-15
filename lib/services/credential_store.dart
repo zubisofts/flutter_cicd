@@ -136,11 +136,21 @@ class CredentialStore {
   // ── GitHub token ─────────────────────────────────────────────────────────
 
   Future<void> saveGitHubToken(String projectId, String token) async {
-    await _set('cicd.$projectId.git.github_token', token);
+    await _ensureLoaded();
+    _cache!['cicd.$projectId.git.github_token'] = token;
+    _cache!['cicd.git.github_token'] = token;
+    await _flush();
   }
 
   Future<String> loadGitHubToken(String projectId) async {
-    return await _get('cicd.$projectId.git.github_token') ?? '';
+    await _ensureLoaded();
+    final projectToken = _cache!['cicd.$projectId.git.github_token'];
+    final sharedToken = _cache!['cicd.git.github_token'];
+    final existingToken = _cache!.entries
+        .where((e) => e.key.endsWith('.git.github_token') && e.value.isNotEmpty)
+        .map((e) => e.value)
+        .firstOrNull;
+    return projectToken ?? sharedToken ?? existingToken ?? '';
   }
 
   // ── Play Store ────────────────────────────────────────────────────────────
@@ -177,8 +187,7 @@ class CredentialStore {
     await _ensureLoaded();
     return AppleApiKey(
       keyId: _cache![_k(projectId, envName, 'apple.asc_key_id')] ?? '',
-      issuerId:
-          _cache![_k(projectId, envName, 'apple.asc_issuer_id')] ?? '',
+      issuerId: _cache![_k(projectId, envName, 'apple.asc_issuer_id')] ?? '',
       privateKeyContent:
           _cache![_k(projectId, envName, 'apple.asc_private_key')] ?? '',
     );

@@ -21,7 +21,8 @@ class SetupScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (_) =>
-          SetupBloc(getIt<ConfigRepository>(), getIt<CredentialStore>())..add(const SetupInitialized()),
+          SetupBloc(getIt<ConfigRepository>(), getIt<CredentialStore>())
+            ..add(const SetupInitialized()),
       child: const _SetupScreenContent(),
     );
   }
@@ -104,10 +105,7 @@ class _Header extends StatelessWidget {
       children: [
         const Text(
           'Pipeline Setup',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-          ),
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
         ),
         const Gap(4),
         const Text(
@@ -130,10 +128,11 @@ class _ErrorBanner extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF85149).withValues(alpha:0.1),
+        color: const Color(0xFFF85149).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
         border: const Border.fromBorderSide(
-            BorderSide(color: Color(0xFFF85149))),
+          BorderSide(color: Color(0xFFF85149)),
+        ),
       ),
       child: Text(
         error,
@@ -157,10 +156,13 @@ class _ProjectSection extends StatelessWidget {
         children: [
           if (state.selectedProject != null) ...[
             IconButton(
-              onPressed: () => context.go('/settings', extra: {
-                'projectId': state.selectedProject!.id,
-                'env': state.selectedEnv,
-              }),
+              onPressed: () => context.go(
+                '/settings',
+                extra: {
+                  'projectId': state.selectedProject!.id,
+                  'env': state.selectedEnv,
+                },
+              ),
               icon: const Icon(Icons.settings, size: 16),
               tooltip: 'Configure',
               color: const Color(0xFF8B949E),
@@ -169,8 +171,8 @@ class _ProjectSection extends StatelessWidget {
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             ),
             IconButton(
-              onPressed: () => _confirmDeleteProject(
-                  context, bloc, state.selectedProject!),
+              onPressed: () =>
+                  _confirmDeleteProject(context, bloc, state.selectedProject!),
               icon: const Icon(Icons.delete_outline, size: 16),
               tooltip: 'Delete project',
               color: const Color(0xFFF85149),
@@ -183,8 +185,9 @@ class _ProjectSection extends StatelessWidget {
             onPressed: () async {
               final result = await NewProjectDialog.show(context);
               if (result != null) {
-                bloc.add(NewProjectRequested(
-                    result.id, result.name, result.repo));
+                bloc.add(
+                  NewProjectRequested(result.id, result.name, result.repo),
+                );
               }
             },
             icon: const Icon(Icons.add, size: 16),
@@ -199,36 +202,36 @@ class _ProjectSection extends StatelessWidget {
       child: state.isLoading
           ? const Center(child: CircularProgressIndicator())
           : state.projects.isEmpty
-              ? _EmptyProjects()
-              : DropdownButtonFormField<String>(
-                  value: state.selectedProject?.id,
-                  dropdownColor: Theme.of(context).colorScheme.surface,
-                  style: TextStyle(
-                      fontSize: 13,
-                      color: Theme.of(context).colorScheme.onSurface),
-                  items: state.projects
-                      .map((p) => DropdownMenuItem(
-                            value: p.id,
-                            child: Text(p.name),
-                          ))
-                      .toList(),
-                  onChanged: (id) {
-                    if (id != null) {
-                      final project = state.projects
-                          .firstWhere((p) => p.id == id);
-                      bloc.add(ProjectSelected(project));
-                    }
-                  },
-                  decoration: const InputDecoration(
-                    labelText: 'Select Project',
-                  ),
-                ),
+          ? _EmptyProjects()
+          : DropdownButtonFormField<String>(
+              initialValue: state.selectedProject?.id,
+              dropdownColor: Theme.of(context).colorScheme.surface,
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              items: state.projects
+                  .map(
+                    (p) => DropdownMenuItem(value: p.id, child: Text(p.name)),
+                  )
+                  .toList(),
+              onChanged: (id) {
+                if (id != null) {
+                  final project = state.projects.firstWhere((p) => p.id == id);
+                  bloc.add(ProjectSelected(project));
+                }
+              },
+              decoration: const InputDecoration(labelText: 'Select Project'),
+            ),
     );
   }
 }
 
 Future<void> _confirmDeleteProject(
-    BuildContext context, SetupBloc bloc, AppProject project) async {
+  BuildContext context,
+  SetupBloc bloc,
+  AppProject project,
+) async {
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -245,8 +248,7 @@ Future<void> _confirmDeleteProject(
         ),
         TextButton(
           onPressed: () => Navigator.pop(ctx, true),
-          style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFFF85149)),
+          style: TextButton.styleFrom(foregroundColor: const Color(0xFFF85149)),
           child: const Text('Delete'),
         ),
       ],
@@ -266,7 +268,8 @@ class _EmptyProjects extends StatelessWidget {
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(6),
         border: Border.fromBorderSide(
-            BorderSide(color: Theme.of(context).colorScheme.outline)),
+          BorderSide(color: Theme.of(context).colorScheme.outline),
+        ),
       ),
       child: Column(
         children: const [
@@ -313,14 +316,77 @@ class _BranchSection extends StatelessWidget {
                   ? null
                   : () => bloc.add(ProjectSelected(state.selectedProject!)),
             ),
-      child: _BranchAutocomplete(state: state),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _BranchAutocomplete(
+            key: ValueKey(
+              '${state.selectedProject?.id}:${state.branches.length}:'
+              '${state.tags.length}:${state.isFetchingBranches}',
+            ),
+            state: state,
+          ),
+          if (state.branchFetchMessage != null) ...[
+            const Gap(8),
+            _BranchFetchStatus(state: state),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _BranchFetchStatus extends StatelessWidget {
+  final SetupState state;
+  const _BranchFetchStatus({required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    final isError =
+        state.error != null &&
+        state.error == state.branchFetchMessage &&
+        state.branches.isEmpty &&
+        state.tags.isEmpty &&
+        !state.isFetchingBranches;
+    final color = isError
+        ? const Color(0xFFF85149)
+        : Theme.of(context).colorScheme.onSurfaceVariant;
+    final icon = isError
+        ? Icons.error_outline
+        : state.isFetchingBranches
+        ? Icons.sync
+        : Icons.info_outline;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: isError ? 0.08 : 0.06),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.fromBorderSide(
+          BorderSide(color: color.withValues(alpha: 0.45), width: 0.5),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const Gap(8),
+          Expanded(
+            child: SelectableText(
+              state.branchFetchMessage!,
+              style: TextStyle(color: color, fontSize: 12, height: 1.35),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
 class _BranchAutocomplete extends StatefulWidget {
   final SetupState state;
-  const _BranchAutocomplete({required this.state});
+  const _BranchAutocomplete({super.key, required this.state});
 
   @override
   State<_BranchAutocomplete> createState() => _BranchAutocompleteState();
@@ -329,6 +395,7 @@ class _BranchAutocomplete extends StatefulWidget {
 class _BranchAutocompleteState extends State<_BranchAutocomplete> {
   late TextEditingController _ctrl;
   late FocusNode _focusNode;
+  bool _showAllRefs = true;
 
   @override
   void initState() {
@@ -354,29 +421,32 @@ class _BranchAutocompleteState extends State<_BranchAutocomplete> {
   }
 
   List<_GitRef> get _allRefs => [
-        ...widget.state.branches.map((b) => _GitRef(b, isTag: false)),
-        ...widget.state.tags.map((t) => _GitRef(t, isTag: true)),
-      ];
+    ...widget.state.branches.map((b) => _GitRef(b, isTag: false)),
+    ...widget.state.tags.map((t) => _GitRef(t, isTag: true)),
+  ];
 
   @override
   Widget build(BuildContext context) {
     final bloc = context.read<SetupBloc>();
-    final refsLoaded = widget.state.branches.isNotEmpty ||
-        widget.state.tags.isNotEmpty;
-    final isInvalid = refsLoaded && !widget.state.branchValid &&
+    final refsLoaded =
+        widget.state.branches.isNotEmpty || widget.state.tags.isNotEmpty;
+    final isInvalid =
+        refsLoaded &&
+        !widget.state.branchValid &&
         widget.state.branch.isNotEmpty;
 
     return RawAutocomplete<_GitRef>(
       textEditingController: _ctrl,
       focusNode: _focusNode,
       optionsBuilder: (textValue) {
+        if (_showAllRefs) return _allRefs;
         final query = textValue.text.toLowerCase();
         if (query.isEmpty) return _allRefs;
-        return _allRefs
-            .where((r) => r.name.toLowerCase().contains(query));
+        return _allRefs.where((r) => r.name.toLowerCase().contains(query));
       },
       onSelected: (ref) {
         _ctrl.text = ref.name;
+        setState(() => _showAllRefs = true);
         bloc.add(BranchChanged(ref.name));
       },
       fieldViewBuilder: (context, ctrl, focusNode, onSubmit) {
@@ -387,18 +457,28 @@ class _BranchAutocompleteState extends State<_BranchAutocomplete> {
           decoration: InputDecoration(
             labelText: refsLoaded ? 'Branch or tag' : 'Branch name',
             hintText: 'main',
-            prefixIcon: const Icon(Icons.call_split,
-                size: 16, color: Color(0xFF8B949E)),
+            prefixIcon: const Icon(
+              Icons.call_split,
+              size: 16,
+              color: Color(0xFF8B949E),
+            ),
             suffixIcon: isInvalid
                 ? const Tooltip(
                     message: 'Not found in remote refs',
-                    child: Icon(Icons.warning_amber_rounded,
-                        size: 16, color: Color(0xFFF0A500)),
+                    child: Icon(
+                      Icons.warning_amber_rounded,
+                      size: 16,
+                      color: Color(0xFFF0A500),
+                    ),
                   )
                 : null,
             errorText: isInvalid ? 'Not a known branch or tag' : null,
           ),
-          onChanged: (v) => bloc.add(BranchChanged(v)),
+          onChanged: (v) {
+            setState(() => _showAllRefs = false);
+            bloc.add(BranchChanged(v));
+          },
+          onTap: () => setState(() => _showAllRefs = true),
           onSubmitted: (_) => onSubmit(),
         );
       },
@@ -421,13 +501,13 @@ class _BranchAutocompleteState extends State<_BranchAutocomplete> {
                     onTap: () => onSelected(ref),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       child: Row(
                         children: [
                           Icon(
-                            ref.isTag
-                                ? Icons.sell_outlined
-                                : Icons.call_split,
+                            ref.isTag ? Icons.sell_outlined : Icons.call_split,
                             size: 13,
                             color: ref.isTag
                                 ? const Color(0xFF3FB950)
@@ -437,19 +517,20 @@ class _BranchAutocompleteState extends State<_BranchAutocomplete> {
                           Expanded(
                             child: Text(
                               ref.name,
-                              style: const TextStyle(
-                                fontSize: 13,
-                              ),
+                              style: const TextStyle(fontSize: 13),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           if (ref.isTag)
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 5, vertical: 1),
+                                horizontal: 5,
+                                vertical: 1,
+                              ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF3FB950)
-                                    .withValues(alpha: 0.15),
+                                color: const Color(
+                                  0xFF3FB950,
+                                ).withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: const Text(
@@ -504,22 +585,25 @@ class _EnvironmentSection extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: const Color(0xFFF85149).withValues(alpha:0.08),
+                color: const Color(0xFFF85149).withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(6),
                 border: const Border.fromBorderSide(
-                    BorderSide(color: Color(0xFFF85149), width: 0.5)),
+                  BorderSide(color: Color(0xFFF85149), width: 0.5),
+                ),
               ),
               child: Row(
                 children: const [
-                  Icon(Icons.warning_amber_rounded,
-                      color: Color(0xFFF85149), size: 16),
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    color: Color(0xFFF85149),
+                    size: 16,
+                  ),
                   Gap(8),
                   Expanded(
                     child: Text(
                       'Production environment selected. '
                       'You will be asked to confirm before the pipeline runs.',
-                      style: TextStyle(
-                          color: Color(0xFFF85149), fontSize: 12),
+                      style: TextStyle(color: Color(0xFFF85149), fontSize: 12),
                     ),
                   ),
                 ],
@@ -547,10 +631,8 @@ class _VersionSectionState extends State<_VersionSection> {
   @override
   void initState() {
     super.initState();
-    _versionCtrl =
-        TextEditingController(text: widget.state.versionName);
-    _buildCtrl =
-        TextEditingController(text: widget.state.buildNumber);
+    _versionCtrl = TextEditingController(text: widget.state.versionName);
+    _buildCtrl = TextEditingController(text: widget.state.buildNumber);
   }
 
   @override
@@ -614,7 +696,6 @@ class _VersionSectionState extends State<_VersionSection> {
   }
 }
 
-
 class _PlatformSection extends StatelessWidget {
   final SetupState state;
   const _PlatformSection({required this.state});
@@ -625,8 +706,7 @@ class _PlatformSection extends StatelessWidget {
       title: 'PLATFORMS',
       child: PlatformSelector(
         selected: state.platforms,
-        onToggle: (p) =>
-            context.read<SetupBloc>().add(PlatformToggled(p)),
+        onToggle: (p) => context.read<SetupBloc>().add(PlatformToggled(p)),
       ),
     );
   }
@@ -642,8 +722,7 @@ class _TargetSection extends StatelessWidget {
       title: 'DISTRIBUTION TARGETS',
       child: TargetSelector(
         selected: state.targets,
-        onToggle: (t) =>
-            context.read<SetupBloc>().add(TargetToggled(t)),
+        onToggle: (t) => context.read<SetupBloc>().add(TargetToggled(t)),
       ),
     );
   }
@@ -709,15 +788,16 @@ class _PlayStoreOptionsSectionState extends State<_PlayStoreOptionsSection> {
                     Text(
                       'Upload as draft — publish manually from the Play Console',
                       style: TextStyle(
-                          fontSize: 11, color: cs.onSurfaceVariant),
+                        fontSize: 11,
+                        color: cs.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
               ),
               Switch(
                 value: widget.state.managedPublishing,
-                onChanged: (_) =>
-                    bloc.add(const ManagedPublishingToggled()),
+                onChanged: (_) => bloc.add(const ManagedPublishingToggled()),
               ),
             ],
           ),
@@ -738,9 +818,8 @@ class _ActionBar extends StatelessWidget {
         const Spacer(),
         ElevatedButton.icon(
           onPressed: state.isValid
-              ? () => context
-                  .read<SetupBloc>()
-                  .add(const RunPipelineRequested())
+              ? () =>
+                    context.read<SetupBloc>().add(const RunPipelineRequested())
               : null,
           icon: const Icon(Icons.rocket_launch, size: 16),
           label: Text(
@@ -753,8 +832,7 @@ class _ActionBar extends StatelessWidget {
                 ? const Color(0xFFF85149)
                 : const Color(0xFF58A6FF),
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(
-                horizontal: 24, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           ),
         ),
       ],
@@ -785,18 +863,21 @@ class _VersionPreviewPanel extends StatelessWidget {
             ),
           ),
           const Gap(16),
-          _PreviewItem(label: 'Project',
-              value: state.selectedProject?.name ?? '—'),
+          _PreviewItem(
+            label: 'Project',
+            value: state.selectedProject?.name ?? '—',
+          ),
           _PreviewItem(label: 'Branch', value: state.branch),
-          _PreviewItem(label: 'Environment',
-              value: state.selectedEnv.toUpperCase()),
+          _PreviewItem(
+            label: 'Environment',
+            value: state.selectedEnv.toUpperCase(),
+          ),
           _PreviewItem(label: 'Version', value: state.versionPreview),
+          _PreviewItem(label: 'Platforms', value: state.platforms.join(', ')),
           _PreviewItem(
-              label: 'Platforms',
-              value: state.platforms.join(', ')),
-          _PreviewItem(
-              label: 'Targets',
-              value: state.targets.isEmpty ? '—' : state.targets.join(', ')),
+            label: 'Targets',
+            value: state.targets.isEmpty ? '—' : state.targets.join(', '),
+          ),
           const Divider(height: 24),
           if (state.selectedEnv == 'prod')
             const _ProdWarning()
@@ -820,14 +901,15 @@ class _PreviewItem extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: const TextStyle(
-                  color: Color(0xFF8B949E), fontSize: 11)),
+          Text(
+            label,
+            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+          ),
           const Gap(2),
-          Text(value,
-              style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500)),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+          ),
         ],
       ),
     );
@@ -842,7 +924,7 @@ class _ProdWarning extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0xFFF85149).withValues(alpha:0.1),
+        color: const Color(0xFFF85149).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
       ),
       child: const Row(
@@ -852,8 +934,7 @@ class _ProdWarning extends StatelessWidget {
           Expanded(
             child: Text(
               'Confirmation required',
-              style:
-                  TextStyle(color: Color(0xFFF85149), fontSize: 11),
+              style: TextStyle(color: Color(0xFFF85149), fontSize: 11),
             ),
           ),
         ],
@@ -870,19 +951,17 @@ class _ReadyIndicator extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0xFF3FB950).withValues(alpha:0.1),
+        color: const Color(0xFF3FB950).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
       ),
       child: const Row(
         children: [
-          Icon(Icons.check_circle_outline,
-              size: 14, color: Color(0xFF3FB950)),
+          Icon(Icons.check_circle_outline, size: 14, color: Color(0xFF3FB950)),
           Gap(6),
           Expanded(
             child: Text(
               'Ready to launch',
-              style:
-                  TextStyle(color: Color(0xFF3FB950), fontSize: 11),
+              style: TextStyle(color: Color(0xFF3FB950), fontSize: 11),
             ),
           ),
         ],
